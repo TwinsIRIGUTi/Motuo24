@@ -286,31 +286,40 @@
       drawBoard();
     }
 
-    canvas.addEventListener("click", e => {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+canvas.addEventListener("click", e => {
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
 
-      let emptyX = -1, emptyY = -1;
-      for (let j = 0; j < GRID_SIZE; j++) {
-        for (let i = 0; i < GRID_SIZE; i++) {
-          if (board[j][i] === EMPTY) {
-            emptyX = i;
-            emptyY = j;
-            break;
-          }
-        }
-        if (emptyX !== -1) break;
-      }
+  const x = Math.floor(clickX / BLOCK_SIZE);
+  const y = Math.floor(clickY / BLOCK_SIZE);
 
-      const dx = Math.abs(x - emptyX);
-      const dy = Math.abs(y - emptyY);
-      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-        board[emptyY][emptyX] = board[y][x];
-        board[y][x] = EMPTY;
-        cursor = { x: emptyX, y: emptyY };
+  if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
+  // 空白マスを探す
+  let emptyX = -1, emptyY = -1;
+  for (let j = 0; j < GRID_SIZE; j++) {
+    for (let i = 0; i < GRID_SIZE; i++) {
+      if (board[j][i] === EMPTY) {
+        emptyX = i;
+        emptyY = j;
+        break;
       }
-    });
+    }
+    if (emptyX !== -1) break;
+  }
+
+  // 隣接しているならスライド移動
+  const dx = Math.abs(x - emptyX);
+  const dy = Math.abs(y - emptyY);
+  if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+    const temp = board[y][x];
+    board[y][x] = EMPTY;
+    board[emptyY][emptyX] = temp;
+    cursor = { x: emptyX, y: emptyY };
+    drawBoard(); // すぐ反映
+  }
+});
 
     window.startGame = startGame;
     window.endGame = endGame;
