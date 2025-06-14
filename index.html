@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>モツオ24</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #fff;
+      font-family: "Kosugi Maru", sans-serif;
+      text-align: center;
+    }
+    canvas {
+      background: #222;
+      touch-action: none;
+      margin-top: 10px;
+      border-radius: 10px;
+    }
+    #scoreDisplay, #timeDisplay, #wordDisplay {
+      margin: 10px 0;
+      font-size: 1.2em;
+    }
+    .wordEffect {
+      font-size: 32px;
+      color: gold;
+      margin: 10px auto;
+    }
+    button {
+      font-size: 1em;
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+      background: #444;
+      color: white;
+    }
+    #startScreen, #gameUI {
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>モツオ24</h1>
+    <button onclick="startGame(3)">3分モード</button>
+    <button onclick="startGame(5)">5分モード</button>
+    <button onclick="startGame('endless')">エンドレス</button>
+  </div>
+
+  <div id="gameUI" style="display:none;">
+    <div id="scoreDisplay">スコア: 0</div>
+    <div id="timeDisplay"></div>
+    <div id="wordDisplay"></div>
+    <canvas id="game" width="300" height="300"></canvas>
+    <div>
+      <button onclick="togglePause()" id="pauseBtn">一時停止</button>
+      <button onclick="endGame()">終了</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const BLOCK_SIZE = 75;
+    const GRID_SIZE = 4;
+    const kanaList = [..."ア,イ,ウ,エ,オ,カ,ガ,キ,ク,コ,サ,シ,ス,セ,ソ,タ,チ,ツ,テ,ト,ナ,ニ,ヌ,ネ,ノ,ハ,ヒ,フ,ヘ,ホ,マ,ミ,ム,メ,モ,ヤ,ユ,ヨ,ラ,リ,ル,レ,ロ,ワ,ン,ー".split(",")];
+    const words = ["シロ","レバ","ガツ","ツル","ホネ","ハツ","アブラ","カシラ","ビール","ウメワリ","サイダー","タンナマ","シンキ","オシンコ","ダイコン","ニコミ","ナンコツ","コブクロ","ブドウワリ","ウイスキー","ツインズ"];
+    let board = [], score = 0, remainingTime = 0, isPaused = false, frameCount = 0, gameInterval;
+
+    function getRandomKana() {
+      return kanaList[Math.floor(Math.random() * kanaList.length)];
+    }
+
+    function createBlock() {
+      return { char: getRandomKana() };
+    }
+
+    function initBoard() {
+      board = Array.from({ length: GRID_SIZE }, () =>
+        Array.from({ length: GRID_SIZE }, () => createBlock())
+      );
+    }
+
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          ctx.fillStyle = "#fff5cc";
+          ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+          ctx.fillStyle = "#000";
+          ctx.font = "32px Kosugi Maru";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(board[y][x].char, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
+        }
+      }
+    }
+
+    function updateScore(points) {
+      score += points;
+      document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
+    }
+
+    function updateTimeDisplay() {
+      const el = document.getElementById("timeDisplay");
+      if (typeof remainingTime === "number") {
+        const min = Math.floor(remainingTime / 60);
+        const sec = remainingTime % 60;
+        el.textContent = `残り時間: ${min}:${sec.toString().padStart(2, "0")}`;
+      } else {
+        el.textContent = "エンドレスモード";
+      }
+    }
+
+    function showWordEffect(words) {
+      const el = document.getElementById("wordDisplay");
+      el.innerHTML = words.map(w => `<div class="wordEffect">${w}</div>`).join("");
+      setTimeout(() => { el.innerHTML = ""; }, 1000);
+    }
+
+    function checkWords() {
+      let found = [], toReplace = [];
+
+      for (let y = 0; y < GRID_SIZE; y++) {
+        let line = board[y].map(b => b.char).join("");
+        for (const word of words) {
+          let idx = line.indexOf(word);
+          if (idx !== -1) {
+            found.push(word);
+            for (let i = 0; i < word.length; i++) toReplace.push({ x: idx + i, y });
+          }
+        }
+      }
+
+      for (let x = 0; x < GRID_SIZE; x++) {
+        let line = board.map(row => row[x].char).join("");
+        for (const word of words) {
+          let idx = line.indexOf(word);
+          if (idx !== -1) {
+            found.push(word);
+            for (let i = 0; i < word.length; i++) toReplace.push({ x, y: idx + i });
+          }
+        }
+      }
+
+      if (found.length) {
+        found = [...new Set(found)];
+        updateScore(found.reduce((sum, w) => sum + w.length * 10, 0));
+        for (const { x, y } of toReplace) board[y][x] = createBlock();
+        showWordEffect(found);
+      }
+    }
+
+    function startGame(mode) {
+      document.getElementById("startScreen").style.display = "none";
+      document.getElementById("gameUI").style.display = "block";
+      initBoard();
+      drawBoard();
+      score = 0;
+      remainingTime = mode === "endless" ? null : mode * 60;
+      updateScore(0);
+      updateTimeDisplay();
+      clearInterval(gameInterval);
+      isPaused = false;
+      gameInterval = setInterval(() => {
+        if (!isPaused) {
+          frameCount++;
+          if (frameCount % 60 === 0) {
+            if (typeof remainingTime === "number") {
+              remainingTime--;
+              if (remainingTime <= 0) endGame();
+            }
+            updateTimeDisplay();
+            checkWords();
+          }
+          drawBoard();
+        }
+      }, 1000 / 60);
+    }
+
+    function togglePause() {
+      isPaused = !isPaused;
+      document.getElementById("pauseBtn").textContent = isPaused ? "再開" : "一時停止";
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      alert(`ゲーム終了！スコア: ${score}`);
+      document.getElementById("startScreen").style.display = "block";
+      document.getElementById("gameUI").style.display = "none";
+    }
+
+    // フリック操作用
+    let touchStartX = 0, touchStartY = 0;
+    canvas.addEventListener("touchstart", e => {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    });
+
+    canvas.addEventListener("touchend", e => {
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 30) shift("right");
+        else if (dx < -30) shift("left");
+      } else {
+        if (dy > 30) shift("down");
+        else if (dy < -30) shift("up");
+      }
+    });
+
+    function shift(dir) {
+      if (dir === "up") {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const col = board.map(r => r[x]);
+          col.unshift(col.pop());
+          for (let y = 0; y < GRID_SIZE; y++) board[y][x] = col[y];
+        }
+      } else if (dir === "down") {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const col = board.map(r => r[x]);
+          col.push(col.shift());
+          for (let y = 0; y < GRID_SIZE; y++) board[y][x] = col[y];
+        }
+      } else if (dir === "left") {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          board[y].push(board[y].shift());
+        }
+      } else if (dir === "right") {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          board[y].unshift(board[y].pop());
+        }
+      }
+      drawBoard();
+      checkWords();
+    }
+  </script>
+</body>
+</html>
