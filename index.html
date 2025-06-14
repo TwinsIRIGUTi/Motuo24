@@ -1,159 +1,188 @@
-<!-- ※ 省略部分あり。冒頭の HTML/CSS はそのまま -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>モツオ24</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: "Kosugi Maru", sans-serif;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    canvas {
+      touch-action: manipulation;
+      background: #111;
+      display: block;
+      margin: 10px auto;
+      border-radius: 6px;
+    }
+    button {
+      font-size: 1.2em;
+      margin: 10px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      background: #333;
+      color: white;
+    }
+    #scoreDisplay, #wordDisplay {
+      margin: 10px;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>モツオ24</h1>
+  <div id="scoreDisplay">スコア: 0</div>
+  <canvas id="game" width="300" height="300"></canvas>
+  <button onclick="reloadBoard()">リロード</button>
+  <div id="wordDisplay"></div>
 
-<canvas id="game" width="500" height="500" tabindex="0"></canvas>
-<button onclick="reloadBoard()">リロード</button>
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const BLOCK_SIZE = 60;
+    const GRID_SIZE = 5;
+    const EMPTY = null;
+    let board = [];
+    let emptyPos = { x: 0, y: 0 };
+    let score = 0;
 
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const BLOCK_SIZE = 100;
-const GRID_SIZE = 5;
-const EMPTY = null;
-let board = [];
-let score = 0;
-let cursor = { x: 0, y: 0 };
+    const words = [
+      "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ",
+      "ハツ", "カシラ", "ビール", "ウメワリ", "ブドウワリ",
+      "ウイスキー", "サイダー", "ツル", "シンキ", "タンナマ",
+      "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ"
+    ];
 
-const words = [ "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ", "ハツ", "カシラ", "ビール", "ウメワリ", "ブドウワリ", "ウイスキー", "サイダー", "ツル", "シンキ", "タンナマ", "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ" ];
+    let kanaList = [];
+    function buildKanaListFromWords() {
+      const freq = {};
+      for (const word of words) {
+        for (const ch of word) {
+          freq[ch] = (freq[ch] || 0) + 1;
+        }
+      }
+      kanaList = Object.entries(freq).flatMap(([ch, count]) => Array(count).fill(ch));
+    }
+    buildKanaListFromWords();
 
-function createWeightedKanaList(words) {
-  let freq = {};
-  for (let word of words) {
-    for (let char of word) {
-      freq[char] = (freq[char] || 0) + 1;
-    }
-  }
-  let list = [];
-  for (let [char, count] of Object.entries(freq)) {
-    for (let i = 0; i < count; i++) list.push(char);
-  }
-  return list;
-}
+    function getRandomKana() {
+      return kanaList[Math.floor(Math.random() * kanaList.length)];
+    }
 
-const kanaList = createWeightedKanaList(words);
+    function createBlock() {
+      return { char: getRandomKana() };
+    }
 
-function getRandomKana() {
-  return kanaList[Math.floor(Math.random() * kanaList.length)];
-}
+    function initBoard() {
+      board = [];
+      for (let y = 0; y < GRID_SIZE; y++) {
+        const row = [];
+        for (let x = 0; x < GRID_SIZE; x++) {
+          row.push({ char: getRandomKana() });
+        }
+        board.push(row);
+      }
+      emptyPos = { x: GRID_SIZE - 1, y: GRID_SIZE - 1 };
+      board[emptyPos.y][emptyPos.x] = EMPTY;
+    }
 
-function createBlock() {
-  return { char: getRandomKana() };
-}
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const block = board[y][x];
+          ctx.fillStyle = block ? "#fff5cc" : "#111";
+          ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+          if (block) {
+            ctx.fillStyle = "#000";
+            ctx.font = "20px Kosugi Maru";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(block.char, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
+          }
+        }
+      }
+    }
 
-function initBoard() {
-  board = [];
-  for (let y = 0; y < GRID_SIZE; y++) {
-    const row = [];
-    for (let x = 0; x < GRID_SIZE; x++) {
-      row.push(createBlock());
-    }
-    board.push(row);
-  }
-  // 空白を1マス作成（ランダム）
-  const emptyX = Math.floor(Math.random() * GRID_SIZE);
-  const emptyY = Math.floor(Math.random() * GRID_SIZE);
-  board[emptyY][emptyX] = EMPTY;
-}
+    function updateScore(points) {
+      score += points;
+      document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
+    }
 
-function reloadBoard() {
-  initBoard();
-  drawBoard();
-}
+    function showWordEffect(words) {
+      const display = document.getElementById("wordDisplay");
+      display.innerHTML = words.map(w => `<div>${w}</div>`).join('');
+      setTimeout(() => { display.innerHTML = ''; }, 1000);
+    }
 
-function drawBoard() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      const block = board[y][x];
-      ctx.fillStyle = block ? "#fff5cc" : "#111";
-      ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
-      if (block) {
-        ctx.fillStyle = "#000";
-        ctx.font = "48px Kosugi Maru";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(block.char, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
-      }
-    }
-  }
-}
+    function checkWords() {
+      let foundWords = [];
+      let clearPos = [];
 
-function findEmpty() {
-  for (let y = 0; y < GRID_SIZE; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      if (board[y][x] === EMPTY) return { x, y };
-    }
-  }
-  return null;
-}
+      for (let y = 0; y < GRID_SIZE; y++) {
+        let line = board[y].map(b => b ? b.char : "").join("");
+        for (const word of words) {
+          const idx = line.indexOf(word);
+          if (idx !== -1) {
+            foundWords.push(word);
+            for (let i = 0; i < word.length; i++) clearPos.push({ x: idx + i, y });
+          }
+        }
+      }
 
-function isAdjacent(x1, y1, x2, y2) {
-  return (Math.abs(x1 - x2) + Math.abs(y1 - y2)) === 1;
-}
+      for (let x = 0; x < GRID_SIZE; x++) {
+        let line = "";
+        for (let y = 0; y < GRID_SIZE; y++) line += board[y][x] ? board[y][x].char : "";
+        for (const word of words) {
+          const idx = line.indexOf(word);
+          if (idx !== -1) {
+            foundWords.push(word);
+            for (let i = 0; i < word.length; i++) clearPos.push({ x, y: idx + i });
+          }
+        }
+      }
 
-canvas.addEventListener("click", function (e) {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-  const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
-  const empty = findEmpty();
-  if (isAdjacent(x, y, empty.x, empty.y)) {
-    const temp = board[y][x];
-    board[y][x] = EMPTY;
-    board[empty.y][empty.x] = temp;
-    drawBoard();
-    checkWords();
-  }
-});
+      if (foundWords.length > 0) {
+        foundWords = [...new Set(foundWords)];
+        showWordEffect(foundWords);
+        for (const pos of clearPos) {
+          board[pos.y][pos.x] = createBlock();
+        }
+        updateScore(foundWords.reduce((sum, w) => sum + w.length * 10, 0));
+        board[emptyPos.y][emptyPos.x] = EMPTY;
+      }
+    }
 
-function checkWords() {
-  let foundWords = [];
-  let positionsToClear = [];
+    canvas.addEventListener("pointerdown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
+      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+      const dx = Math.abs(x - emptyPos.x);
+      const dy = Math.abs(y - emptyPos.y);
+      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+        board[emptyPos.y][emptyPos.x] = board[y][x];
+        board[y][x] = EMPTY;
+        emptyPos = { x, y };
+        checkWords();
+        drawBoard();
+      }
+    });
 
-  // 横チェック
-  for (let y = 0; y < GRID_SIZE; y++) {
-    let line = "";
-    for (let x = 0; x < GRID_SIZE; x++) {
-      line += board[y][x] ? board[y][x].char : "";
-    }
-    for (const word of words) {
-      const idx = line.indexOf(word);
-      if (idx !== -1) {
-        foundWords.push(word);
-        for (let i = 0; i < word.length; i++) {
-          positionsToClear.push({ x: idx + i, y });
-        }
-      }
-    }
-  }
+    function reloadBoard() {
+      initBoard();
+      score = 0;
+      updateScore(0);
+      drawBoard();
+    }
 
-  // 縦チェック
-  for (let x = 0; x < GRID_SIZE; x++) {
-    let line = "";
-    for (let y = 0; y < GRID_SIZE; y++) {
-      line += board[y][x] ? board[y][x].char : "";
-    }
-    for (const word of words) {
-      const idx = line.indexOf(word);
-      if (idx !== -1) {
-        foundWords.push(word);
-        for (let i = 0; i < word.length; i++) {
-          positionsToClear.push({ x, y: idx + i });
-        }
-      }
-    }
-  }
-
-  if (foundWords.length > 0) {
-    const unique = new Set();
-    for (let pos of positionsToClear) {
-      if (!unique.has(`${pos.x},${pos.y}`)) {
-        board[pos.y][pos.x] = createBlock();
-        unique.add(`${pos.x},${pos.y}`);
-      }
-    }
-    drawBoard();
-  }
-}
-
-initBoard();
-drawBoard();
-</script>
+    initBoard();
+    drawBoard();
+  </script>
+</body>
+</html>
