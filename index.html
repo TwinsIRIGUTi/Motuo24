@@ -15,6 +15,7 @@
       background: #111;
       display: block;
       border-radius: 6px;
+      touch-action: none;
     }
     #scoreDisplay, #wordDisplay, #controls, #timeDisplay {
       margin: 10px;
@@ -71,6 +72,7 @@
   </style>
 </head>
 <body>
+  <!-- 省略せず全コード続きます（略しません） -->
   <div id="startScreen">
     <h1>モツオ24</h1>
     <button onclick="startGame(3)">3分モード</button>
@@ -84,7 +86,7 @@
     <div id="wordDisplay"></div>
 
     <div id="gameArea">
-      <canvas id="game" width="500" height="500" tabindex="0"></canvas>
+      <canvas id="game" width="500" height="500"></canvas>
       <div id="wordList">
         <h3>成立単語</h3>
         <ul>
@@ -114,6 +116,7 @@
     let remainingTime;
     let isPaused = false;
     let frameCount = 0;
+    let emptyPos = { x: 0, y: 0 };
 
     const words = [
       "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ",
@@ -122,14 +125,17 @@
       "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ"
     ];
 
-    // 使用頻度の重み付きかなリストを作る
-    const charFreq = {};
-    words.forEach(word => {
+    const kanaFrequency = {};
+    for (const word of words) {
       for (const char of word) {
-        charFreq[char] = (charFreq[char] || 0) + 1;
+        kanaFrequency[char] = (kanaFrequency[char] || 0) + 1;
       }
-    });
-    const kanaList = Object.entries(charFreq).flatMap(([char, count]) => Array(count).fill(char));
+    }
+
+    const kanaList = [];
+    for (const [char, freq] of Object.entries(kanaFrequency)) {
+      for (let i = 0; i < freq; i++) kanaList.push(char);
+    }
 
     function getRandomKana() {
       return kanaList[Math.floor(Math.random() * kanaList.length)];
@@ -141,13 +147,12 @@
 
     function initBoard() {
       board = [];
-      let emptyPlaced = false;
       for (let y = 0; y < GRID_SIZE; y++) {
         const row = [];
         for (let x = 0; x < GRID_SIZE; x++) {
-          if (!emptyPlaced && x === GRID_SIZE - 1 && y === GRID_SIZE - 1) {
+          if (x === 0 && y === 0) {
             row.push(EMPTY);
-            emptyPlaced = true;
+            emptyPos = { x, y };
           } else {
             row.push(createBlock());
           }
@@ -193,9 +198,7 @@
     function showWordEffect(foundWords) {
       const display = document.getElementById('wordDisplay');
       display.innerHTML = foundWords.map(w => `<div class="wordEffect">${w}</div>`).join('');
-      setTimeout(() => {
-        display.innerHTML = '';
-      }, 1500);
+      setTimeout(() => { display.innerHTML = ''; }, 1500);
     }
 
     function checkWords() {
@@ -285,58 +288,32 @@
       drawBoard();
     }
 
-    canvas.addEventListener("touchstart", handleTouchStart, false);
-    canvas.addEventListener("touchend", handleTouchEnd, false);
-    let xDown = null;
-    let yDown = null;
+    // スライド処理
+    let startX, startY;
+    canvas.addEventListener("touchstart", e => {
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      startX = touch.clientX - rect.left;
+      startY = touch.clientY - rect.top;
+    });
 
-    function handleTouchStart(evt) {
-      const firstTouch = evt.touches[0];
-      xDown = firstTouch.clientX;
-      yDown = firstTouch.clientY;
-    }
-
-    function handleTouchEnd(evt) {
-      if (!xDown || !yDown) return;
-      const xUp = evt.changedTouches[0].clientX;
-      const yUp = evt.changedTouches[0].clientY;
-      const dx = xUp - xDown;
-      const dy = yUp - yDown;
-
-      let dir = null;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        dir = dx > 0 ? "left" : "right";
-      } else {
-        dir = dy > 0 ? "up" : "down";
-      }
-
-      moveTile(dir);
-      xDown = yDown = null;
-    }
-
-    function moveTile(dir) {
-      let emptyX, emptyY;
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          if (board[y][x] === EMPTY) {
-            emptyX = x;
-            emptyY = y;
-          }
-        }
-      }
-
-      let targetX = emptyX;
-      let targetY = emptyY;
-      if (dir === "left") targetX += 1;
-      if (dir === "right") targetX -= 1;
-      if (dir === "up") targetY += 1;
-      if (dir === "down") targetY -= 1;
-
-      if (targetX >= 0 && targetX < GRID_SIZE && targetY >= 0 && targetY < GRID_SIZE) {
-        board[emptyY][emptyX] = board[targetY][targetX];
-        board[targetY][targetX] = EMPTY;
-      }
-    }
+    canvas.addEventListener("touchend", e => {
+      const dx = e.changedTouches[0].clientX - e.touches[0]?.clientX ?? startX;
+      const dy = e.changedTouches[0].clientY - e.touches[0]?.clientY ?? startY;
+      const direction = Math.abs(dx) > Math.abs(dy)
+        ? (dx < 0 ? "left" : "right")
+        : (dy < 0 ? "up" : "down");
+      const { x, y } = emptyPos;
+      let tx = x, ty = y;
+      if (direction === "left" && x < GRID_SIZE - 1) tx = x + 1;
+      if (direction === "right" && x > 0) tx = x - 1;
+      if (direction === "up" && y < GRID_SIZE - 1) ty = y + 1;
+      if (direction === "down" && y > 0) ty = y - 1;
+      const temp = board[y][x];
+      board[y][x] = board[ty][tx];
+      board[ty][tx] = temp;
+      emptyPos = { x: tx, y: ty };
+    });
   </script>
 </body>
 </html>
