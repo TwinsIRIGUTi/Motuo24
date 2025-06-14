@@ -15,7 +15,6 @@
       background: #111;
       display: block;
       border-radius: 6px;
-      touch-action: none;
     }
     #scoreDisplay, #wordDisplay, #controls, #timeDisplay {
       margin: 10px;
@@ -72,7 +71,6 @@
   </style>
 </head>
 <body>
-  <!-- 省略せず全コード続きます（略しません） -->
   <div id="startScreen">
     <h1>モツオ24</h1>
     <button onclick="startGame(3)">3分モード</button>
@@ -86,7 +84,7 @@
     <div id="wordDisplay"></div>
 
     <div id="gameArea">
-      <canvas id="game" width="500" height="500"></canvas>
+      <canvas id="game" width="500" height="500" tabindex="0"></canvas>
       <div id="wordList">
         <h3>成立単語</h3>
         <ul>
@@ -101,6 +99,7 @@
     <div id="controls">
       <button onclick="togglePause()" id="pauseBtn">一時停止</button>
       <button onclick="endGame()">終了</button>
+      <button onclick="reloadBoard()">リロード</button>
     </div>
   </div>
 
@@ -116,41 +115,15 @@
     let remainingTime;
     let isPaused = false;
     let frameCount = 0;
-    let emptyPos = { x: 0, y: 0 };
+    let cursor = { x: 0, y: 0 };
 
+    const kanaList = [..."シ,ロ,レ,バ,ガ,ツ,ホ,ハ,ア,ブ,ラ,カ,シ,ラ,ビ,ー,ル,ニ,コ,ミ,ウ,メ,ワ,リ,ド,ウ,サ,イ,ダ,ー,キ,ン,オ,シ,ン,コ,ダ,イ,ン,ツ,ズ".split(",")];
     const words = [
       "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ",
       "ハツ", "カシラ", "ビール", "ウメワリ", "ブドウワリ",
       "ウイスキー", "サイダー", "ツル", "シンキ", "タンナマ",
       "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ"
     ];
-
-    const kanaFrequency = {};
-    for (const word of words) {
-      for (const char of word) {
-        kanaFrequency[char] = (kanaFrequency[char] || 0) + 1;
-      }
-    }
-
-   // 揃いやすい単語の文字を元にした出現確率を加味した kanaList
-const kanaList = [
-  "ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ","ツ", // 16
-  "シ","シ","シ","シ","シ","シ","シ","シ","シ","シ", // 10
-  "ロ","ロ","ロ","ロ","ロ","ロ","ロ","ロ","ロ", // 9
-  "ガ","ガ","ガ","ガ","ガ","ガ", // 6
-  "ル","ル","ル","ル","ル","ル", // 6
-  "ハ","ハ","ハ","ハ","ハ", // 5
-  "レ","レ","レ", // 3
-  "バ","バ","バ", // 3
-  "ホ","ホ","ホ", // 3
-  "ネ","ネ","ネ", // 3
-  // その他文字も入れて多様性保持
-  "ア","イ","ウ","オ","カ","キ","ク","コ","サ","ス","タ","ダ",
-  "ナ","ニ","マ","ミ","メ","ラ","リ","ワ","ン","ブ","ビ","ド","ー","ズ"
-];
-    for (const [char, freq] of Object.entries(kanaFrequency)) {
-      for (let i = 0; i < freq; i++) kanaList.push(char);
-    }
 
     function getRandomKana() {
       return kanaList[Math.floor(Math.random() * kanaList.length)];
@@ -165,14 +138,18 @@ const kanaList = [
       for (let y = 0; y < GRID_SIZE; y++) {
         const row = [];
         for (let x = 0; x < GRID_SIZE; x++) {
-          if (x === 0 && y === 0) {
-            row.push(EMPTY);
-            emptyPos = { x, y };
-          } else {
-            row.push(createBlock());
-          }
+          row.push((x === 0 && y === 0) ? EMPTY : createBlock());
         }
         board.push(row);
+      }
+      cursor = { x: 0, y: 0 };
+    }
+
+    function reloadBoard() {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          board[y][x] = (x === 0 && y === 0) ? EMPTY : createBlock();
+        }
       }
     }
 
@@ -192,6 +169,9 @@ const kanaList = [
           }
         }
       }
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(cursor.x * BLOCK_SIZE, cursor.y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
     }
 
     function updateScore(points) {
@@ -213,7 +193,9 @@ const kanaList = [
     function showWordEffect(foundWords) {
       const display = document.getElementById('wordDisplay');
       display.innerHTML = foundWords.map(w => `<div class="wordEffect">${w}</div>`).join('');
-      setTimeout(() => { display.innerHTML = ''; }, 1500);
+      setTimeout(() => {
+        display.innerHTML = '';
+      }, 1500);
     }
 
     function checkWords() {
@@ -275,6 +257,7 @@ const kanaList = [
       updateTimeDisplay();
       clearInterval(gameInterval);
       gameInterval = setInterval(gameLoop, 1000 / 60);
+      canvas.focus();
     }
 
     function togglePause() {
@@ -303,31 +286,42 @@ const kanaList = [
       drawBoard();
     }
 
-    // スライド処理
-    let startX, startY;
-    canvas.addEventListener("touchstart", e => {
+    canvas.addEventListener("click", e => {
       const rect = canvas.getBoundingClientRect();
-      const touch = e.touches[0];
-      startX = touch.clientX - rect.left;
-      startY = touch.clientY - rect.top;
+      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
+      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
+
+      let emptyX = -1, emptyY = -1;
+      for (let j = 0; j < GRID_SIZE; j++) {
+        for (let i = 0; i < GRID_SIZE; i++) {
+          if (board[j][i] === EMPTY) {
+            emptyX = i;
+            emptyY = j;
+            break;
+          }
+        }
+        if (emptyX !== -1) break;
+      }
+
+      const dx = Math.abs(x - emptyX);
+      const dy = Math.abs(y - emptyY);
+      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+        board[emptyY][emptyX] = board[y][x];
+        board[y][x] = EMPTY;
+        cursor = { x: emptyX, y: emptyY };
+      }
     });
 
-    canvas.addEventListener("touchend", e => {
-      const dx = e.changedTouches[0].clientX - e.touches[0]?.clientX ?? startX;
-      const dy = e.changedTouches[0].clientY - e.touches[0]?.clientY ?? startY;
-      const direction = Math.abs(dx) > Math.abs(dy)
-        ? (dx < 0 ? "left" : "right")
-        : (dy < 0 ? "up" : "down");
-      const { x, y } = emptyPos;
-      let tx = x, ty = y;
-      if (direction === "left" && x < GRID_SIZE - 1) tx = x + 1;
-      if (direction === "right" && x > 0) tx = x - 1;
-      if (direction === "up" && y < GRID_SIZE - 1) ty = y + 1;
-      if (direction === "down" && y > 0) ty = y - 1;
-      const temp = board[y][x];
-      board[y][x] = board[ty][tx];
-      board[ty][tx] = temp;
-      emptyPos = { x: tx, y: ty };
+    window.startGame = startGame;
+    window.endGame = endGame;
+    window.togglePause = togglePause;
+
+    window.addEventListener("keydown", e => {
+      if (isPaused) return;
+      if (e.key === "ArrowLeft" && cursor.x < GRID_SIZE - 1) cursor.x++;
+      if (e.key === "ArrowRight" && cursor.x > 0) cursor.x--;
+      if (e.key === "ArrowUp" && cursor.y < GRID_SIZE - 1) cursor.y++;
+      if (e.key === "ArrowDown" && cursor.y > 0) cursor.y--;
     });
   </script>
 </body>
