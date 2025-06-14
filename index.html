@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>モツオ24</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     body {
       background: #111;
@@ -11,171 +10,333 @@
       font-family: "Kosugi Maru", sans-serif;
       margin: 0;
       padding: 0;
-      overflow: hidden;
-      touch-action: none;
     }
     canvas {
       background: #111;
       display: block;
-      margin: 10px auto;
       border-radius: 6px;
-      touch-action: none;
     }
-    #ui {
+    #scoreDisplay, #wordDisplay, #controls, #timeDisplay {
+      margin: 10px;
+      font-size: 1.2em;
+      text-align: center;
+    }
+    #startScreen {
+      display: block;
+      text-align: center;
+      margin-top: 50px;
+    }
+    #gameUI {
+      display: none;
       text-align: center;
     }
     button {
-      font-size: 1em;
-      padding: 10px 20px;
+      font-size: 1.1em;
       margin: 5px;
+      padding: 10px 20px;
       border: none;
       border-radius: 6px;
       background: #333;
-      color: #fff;
+      color: white;
+      cursor: pointer;
     }
-    #wordDisplay {
+    button:hover {
+      background: #555;
+    }
+    #gameArea {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      margin-top: 10px;
+    }
+    #wordList {
+      width: 180px;
+      background: #111;
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    #wordList ul {
+      list-style: square;
+      padding-left: 16px;
+    }
+    .wordEffect {
+      font-size: 32px;
       color: gold;
-      font-size: 1.4em;
-      height: 1.5em;
-      margin-top: 5px;
+      text-align: center;
+      margin: 10px auto;
     }
   </style>
 </head>
 <body>
-  <div id="ui">
+  <div id="startScreen">
     <h1>モツオ24</h1>
+    <button onclick="startGame(3)">3分モード</button>
+    <button onclick="startGame(5)">5分モード</button>
+    <button onclick="startGame('endless')">エンドレスモード</button>
+  </div>
+
+  <div id="gameUI">
     <div id="scoreDisplay">スコア: 0</div>
+    <div id="timeDisplay"></div>
     <div id="wordDisplay"></div>
-    <canvas id="game" width="320" height="320"></canvas>
-    <button onclick="resetGame()">リセット</button>
+
+    <div id="gameArea">
+      <canvas id="game" width="500" height="500" tabindex="0"></canvas>
+      <div id="wordList">
+        <h3>成立単語</h3>
+        <ul>
+          <li>シロ</li><li>レバ</li><li>ガツ</li><li>ツル</li><li>ホネ</li><li>ハツ</li>
+          <li>アブラ</li><li>カシラ</li><li>ビール</li><li>ニコミ</li><li>シンキ</li><li>ウメワリ</li>
+          <li>サイダー</li><li>タンナマ</li><li>オシンコ</li><li>ダイコン</li><li>ナンコツ</li><li>コブクロ</li>
+          <li>ブドウワリ</li><li>ウイスキー</li><li>ツインズ</li>
+        </ul>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button onclick="togglePause()" id="pauseBtn">一時停止</button>
+      <button onclick="endGame()">終了</button>
+    </div>
   </div>
 
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
-    const BLOCK_SIZE = 80;
-    const GRID = 4;
-    const kanaList = [..."ア,イ,ウ,エ,オ,カ,ガ,キ,ク,コ,サ,シ,ス,セ,ソ,タ,チ,ツ,テ,ト,ナ,ニ,ヌ,ネ,ノ,ハ,ヒ,フ,ヘ,ホ,マ,ミ,ム,メ,モ,ヤ,ユ,ヨ,ラ,リ,ル,レ,ロ,ワ,ヲ,ン".split(",")];
-    const words = ["シロ","レバ","ガツ","ツル","ホネ","ハツ","アブラ","カシラ","ビール","ニコミ","シンキ","ウメワリ","サイダー","タンナマ","オシンコ","ダイコン","ナンコツ","コブクロ","ブドウワリ","ウイスキー","ツインズ"];
-
-    let grid = [];
+    const BLOCK_SIZE = 100;
+    const GRID_SIZE = 5;
+    const EMPTY = null;
+    let board = [];
     let score = 0;
-    let startX, startY;
+    let gameInterval;
+    let remainingTime;
+    let isPaused = false;
+    let frameCount = 0;
 
-    function createBlock() {
+    const words = [
+      "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ",
+      "ハツ", "カシラ", "ビール", "ウメワリ", "ブドウワリ",
+      "ウイスキー", "サイダー", "ツル", "シンキ", "タンナマ",
+      "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ"
+    ];
+
+    // 使用頻度の重み付きかなリストを作る
+    const charFreq = {};
+    words.forEach(word => {
+      for (const char of word) {
+        charFreq[char] = (charFreq[char] || 0) + 1;
+      }
+    });
+    const kanaList = Object.entries(charFreq).flatMap(([char, count]) => Array(count).fill(char));
+
+    function getRandomKana() {
       return kanaList[Math.floor(Math.random() * kanaList.length)];
     }
 
-    function resetGame() {
-      score = 0;
-      grid = [];
-      for (let y = 0; y < GRID; y++) {
+    function createBlock() {
+      return { char: getRandomKana() };
+    }
+
+    function initBoard() {
+      board = [];
+      let emptyPlaced = false;
+      for (let y = 0; y < GRID_SIZE; y++) {
         const row = [];
-        for (let x = 0; x < GRID; x++) {
-          row.push(createBlock());
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (!emptyPlaced && x === GRID_SIZE - 1 && y === GRID_SIZE - 1) {
+            row.push(EMPTY);
+            emptyPlaced = true;
+          } else {
+            row.push(createBlock());
+          }
         }
-        grid.push(row);
+        board.push(row);
       }
-      updateScore();
-      draw();
     }
 
-    function updateScore() {
-      document.getElementById("scoreDisplay").textContent = "スコア: " + score;
-    }
-
-    function draw() {
+    function drawBoard() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let y = 0; y < GRID; y++) {
-        for (let x = 0; x < GRID; x++) {
-          ctx.fillStyle = "#fff5cc";
-          ctx.fillRect(x * BLOCK_SIZE + 2, y * BLOCK_SIZE + 2, BLOCK_SIZE - 4, BLOCK_SIZE - 4);
-          ctx.fillStyle = "#000";
-          ctx.font = "32px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(grid[y][x], x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const block = board[y][x];
+          ctx.fillStyle = block ? "#fff5cc" : "#111";
+          ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+          if (block) {
+            ctx.fillStyle = "#000";
+            ctx.font = "48px Kosugi Maru";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(block.char, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
+          }
         }
       }
+    }
+
+    function updateScore(points) {
+      score += points;
+      document.getElementById('scoreDisplay').textContent = `スコア: ${score}`;
+    }
+
+    function updateTimeDisplay() {
+      const timeDisplay = document.getElementById('timeDisplay');
+      if (typeof remainingTime === 'number') {
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        timeDisplay.textContent = `残り時間: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        timeDisplay.textContent = "エンドレスモード";
+      }
+    }
+
+    function showWordEffect(foundWords) {
+      const display = document.getElementById('wordDisplay');
+      display.innerHTML = foundWords.map(w => `<div class="wordEffect">${w}</div>`).join('');
+      setTimeout(() => {
+        display.innerHTML = '';
+      }, 1500);
     }
 
     function checkWords() {
-      let matched = [];
-      // 横
-      for (let y = 0; y < GRID; y++) {
-        let line = grid[y].join('');
-        for (let word of words) {
-          let i = line.indexOf(word);
-          if (i !== -1) {
-            for (let k = 0; k < word.length; k++) matched.push(`${i + k},${y}`);
-            score += word.length * 10;
-            showWord(word);
+      let foundWords = [];
+      let positionsToClear = [];
+
+      for (let y = 0; y < GRID_SIZE; y++) {
+        let line = "";
+        for (let x = 0; x < GRID_SIZE; x++) {
+          line += board[y][x] ? board[y][x].char : "";
+        }
+        for (const word of words) {
+          const idx = line.indexOf(word);
+          if (idx !== -1) {
+            foundWords.push(word);
+            for (let i = 0; i < word.length; i++) {
+              positionsToClear.push({ x: idx + i, y });
+            }
           }
         }
       }
-      // 縦
-      for (let x = 0; x < GRID; x++) {
-        let line = grid.map(row => row[x]).join('');
-        for (let word of words) {
-          let i = line.indexOf(word);
-          if (i !== -1) {
-            for (let k = 0; k < word.length; k++) matched.push(`${x},${i + k}`);
-            score += word.length * 10;
-            showWord(word);
+
+      for (let x = 0; x < GRID_SIZE; x++) {
+        let line = "";
+        for (let y = 0; y < GRID_SIZE; y++) {
+          line += board[y][x] ? board[y][x].char : "";
+        }
+        for (const word of words) {
+          const idx = line.indexOf(word);
+          if (idx !== -1) {
+            foundWords.push(word);
+            for (let i = 0; i < word.length; i++) {
+              positionsToClear.push({ x, y: idx + i });
+            }
           }
         }
       }
-      // 補充
-      let unique = [...new Set(matched)];
-      for (let id of unique) {
-        const [x, y] = id.split(',').map(Number);
-        grid[y][x] = createBlock();
+
+      if (foundWords.length > 0) {
+        foundWords = [...new Set(foundWords)];
+        for (const word of foundWords) updateScore(word.length * 10);
+        for (const pos of positionsToClear) {
+          board[pos.y][pos.x] = createBlock();
+        }
+        showWordEffect(foundWords);
       }
-      updateScore();
-      draw();
     }
 
-    function showWord(w) {
-      const el = document.getElementById("wordDisplay");
-      el.textContent = w;
-      setTimeout(() => el.textContent = "", 1000);
+    function startGame(mode) {
+      document.getElementById("startScreen").style.display = "none";
+      document.getElementById("gameUI").style.display = "block";
+      initBoard();
+      drawBoard();
+      score = 0;
+      frameCount = 0;
+      isPaused = false;
+      remainingTime = mode === 'endless' ? null : mode * 60;
+      updateScore(0);
+      updateTimeDisplay();
+      clearInterval(gameInterval);
+      gameInterval = setInterval(gameLoop, 1000 / 60);
     }
 
-    function move(dx, dy) {
-      let x = startX, y = startY;
-      const tx = x + dx;
-      const ty = y + dy;
-      if (tx < 0 || tx >= GRID || ty < 0 || ty >= GRID) return;
-      [grid[y][x], grid[ty][tx]] = [grid[ty][tx], grid[y][x]];
-      startX = tx; startY = ty;
-      draw();
-      checkWords();
+    function togglePause() {
+      isPaused = !isPaused;
+      document.getElementById("pauseBtn").textContent = isPaused ? "再開" : "一時停止";
     }
 
-    // タッチ対応（フリックで移動）
-    canvas.addEventListener("touchstart", e => {
-      const rect = canvas.getBoundingClientRect();
-      const t = e.touches[0];
-      const x = Math.floor((t.clientX - rect.left) / BLOCK_SIZE);
-      const y = Math.floor((t.clientY - rect.top) / BLOCK_SIZE);
-      startX = x; startY = y;
-    });
+    function endGame() {
+      clearInterval(gameInterval);
+      alert("ゲーム終了！スコア: " + score);
+      document.getElementById("startScreen").style.display = "block";
+      document.getElementById("gameUI").style.display = "none";
+    }
 
-    canvas.addEventListener("touchend", e => {
-      const rect = canvas.getBoundingClientRect();
-      const t = e.changedTouches[0];
-      const endX = (t.clientX - rect.left);
-      const endY = (t.clientY - rect.top);
-      const dx = endX - startX * BLOCK_SIZE - BLOCK_SIZE / 2;
-      const dy = endY - startY * BLOCK_SIZE - BLOCK_SIZE / 2;
+    function gameLoop() {
+      if (isPaused) return;
+      frameCount++;
+      if (frameCount % 60 === 0) {
+        if (typeof remainingTime === "number") {
+          remainingTime--;
+          if (remainingTime <= 0) endGame();
+        }
+        updateTimeDisplay();
+        checkWords();
+      }
+      drawBoard();
+    }
+
+    canvas.addEventListener("touchstart", handleTouchStart, false);
+    canvas.addEventListener("touchend", handleTouchEnd, false);
+    let xDown = null;
+    let yDown = null;
+
+    function handleTouchStart(evt) {
+      const firstTouch = evt.touches[0];
+      xDown = firstTouch.clientX;
+      yDown = firstTouch.clientY;
+    }
+
+    function handleTouchEnd(evt) {
+      if (!xDown || !yDown) return;
+      const xUp = evt.changedTouches[0].clientX;
+      const yUp = evt.changedTouches[0].clientY;
+      const dx = xUp - xDown;
+      const dy = yUp - yDown;
+
+      let dir = null;
       if (Math.abs(dx) > Math.abs(dy)) {
-        move(dx > 0 ? 1 : -1, 0);
+        dir = dx > 0 ? "left" : "right";
       } else {
-        move(0, dy > 0 ? 1 : -1);
+        dir = dy > 0 ? "up" : "down";
       }
-    });
 
-    resetGame();
+      moveTile(dir);
+      xDown = yDown = null;
+    }
+
+    function moveTile(dir) {
+      let emptyX, emptyY;
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (board[y][x] === EMPTY) {
+            emptyX = x;
+            emptyY = y;
+          }
+        }
+      }
+
+      let targetX = emptyX;
+      let targetY = emptyY;
+      if (dir === "left") targetX += 1;
+      if (dir === "right") targetX -= 1;
+      if (dir === "up") targetY += 1;
+      if (dir === "down") targetY -= 1;
+
+      if (targetX >= 0 && targetX < GRID_SIZE && targetY >= 0 && targetY < GRID_SIZE) {
+        board[emptyY][emptyX] = board[targetY][targetX];
+        board[targetY][targetX] = EMPTY;
+      }
+    }
   </script>
 </body>
 </html>
