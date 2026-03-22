@@ -76,7 +76,7 @@
 
     <div class="controls">
         <button id="btn-pause">一時停止</button>
-        <button id="btn-finish">ゲーム終了</button>
+        <button id="btn-finish">終了</button>
     </div>
 
     <div id="screen-title" class="overlay">
@@ -96,9 +96,10 @@
     </div>
 
 <script>
-// 出現率の調整：シ、ロ、レ、バ、ハ、ツを多めに配置
-const WEIGHTED_LETTERS = ("シロレバハツ".repeat(6) + "アイオカキサシスソタナニノホマミヤリルレワン".repeat(2) + "ガギグゲゴザジズゼゾダデドバビブベボ").split("");
 const WORDS = ["シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ","レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ","ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ","アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ","ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ","カシラシオ","カシラタレ","カシラミソ","カシラ","ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル","ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー","シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"].sort((a,b)=>b.length-a.length);
+
+// 有効な文字（単語リストに含まれる文字）のみを抽出してプールを作成
+const VALID_CHAR_POOL = WORDS.join("").split("");
 
 const game = {
     board: [], score: 0, timeLeft: 0, timer: null, isPaused: false,
@@ -110,7 +111,10 @@ const game = {
         document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
     },
 
-    getRandomLetter() { return WEIGHTED_LETTERS[Math.floor(Math.random() * WEIGHTED_LETTERS.length)]; },
+    // 単語リストにある文字のみを返す
+    getRandomLetter() { 
+        return VALID_CHAR_POOL[Math.floor(Math.random() * VALID_CHAR_POOL.length)]; 
+    },
 
     start(mode) {
         this.score = 0;
