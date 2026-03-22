@@ -1,188 +1,254 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>モツオ24</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: "Kosugi Maru", sans-serif;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    canvas {
-      touch-action: manipulation;
-      background: #111;
-      display: block;
-      margin: 10px auto;
-      border-radius: 6px;
-    }
-    button {
-      font-size: 1.2em;
-      margin: 10px;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 6px;
-      background: #333;
-      color: white;
-    }
-    #scoreDisplay, #wordDisplay {
-      margin: 10px;
-      font-size: 1.2em;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>モツオ２４</title>
+    <style>
+        :root { --bg: #000814; --tile: #fffdeb; --accent: #ffeb3b; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            background: var(--bg); color: white; font-family: 'Hiragino Sans', sans-serif; 
+            margin: 0; overflow: hidden; touch-action: none; display: flex; flex-direction: column; align-items: center;
+        }
+        
+        /* ヘッダー・スコア */
+        #ui-layer { width: 100%; max-width: 500px; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        #score-box { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        #timer-box { font-size: 1.2rem; font-family: monospace; }
+
+        /* メイン盤面 */
+        #stage { 
+            width: 92vw; height: 92vw; max-width: 400px; max-height: 400px;
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
+            background: rgba(255,255,255,0.05); padding: 5px; border-radius: 10px;
+        }
+        .tile { 
+            background: var(--tile); color: #222; display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: 900; border-radius: 6px; position: relative;
+            box-shadow: 0 3px 0 #d4ccb0; user-select: none;
+        }
+        .tile.empty { opacity: 0; pointer-events: none; }
+        .rainbow { 
+            background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff);
+            background-size: 200%; animation: rb 1s linear infinite; color: white !important; 
+        }
+        @keyframes rb { 0%{background-position:0% 50%} 100%{background-position:100% 50%} }
+        
+        /* 単語一覧ガイド */
+        #word-guide {
+            width: 92vw; max-width: 400px; margin-top: 10px; padding: 8px;
+            background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.75rem;
+            height: 60px; overflow-y: auto; line-height: 1.4; color: #ccc;
+        }
+
+        /* コントロール */
+        .controls { margin-top: 10px; display: flex; gap: 8px; }
+        button { 
+            padding: 8px 16px; border: none; border-radius: 20px; font-weight: bold;
+            background: #444; color: white; font-size: 0.85rem;
+        }
+        #btn-exit-play { background: #c62828; }
+
+        /* オーバーレイ */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .logo { font-size: 3rem; font-weight: 900; color: var(--accent); margin-bottom: 20px; }
+        .menu-btn { width: 200px; padding: 12px; margin: 6px; border-radius: 25px; background: var(--accent); color: #000; font-weight: bold; border:none; }
+        .rank-box { margin-top: 15px; width: 250px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; font-size: 0.85rem; }
+        .hidden { display: none !important; }
+    </style>
 </head>
 <body>
-  <h1>モツオ24</h1>
-  <div id="scoreDisplay">スコア: 0</div>
-  <canvas id="game" width="300" height="300"></canvas>
-  <button onclick="reloadBoard()">リロード</button>
-  <div id="wordDisplay"></div>
 
-  <script>
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
-    const BLOCK_SIZE = 60;
-    const GRID_SIZE = 5;
-    const EMPTY = null;
-    let board = [];
-    let emptyPos = { x: 0, y: 0 };
-    let score = 0;
+    <div id="ui-layer">
+        <div id="score-box">SCORE: 0</div>
+        <div id="timer-box">03:00</div>
+    </div>
 
-    const words = [
-      "シロ", "レバ", "ガツ", "コブクロ", "ナンコツ", "アブラ",
-      "ハツ", "カシラ", "ビール", "ウメワリ", "ブドウワリ",
-      "ウイスキー", "サイダー", "ツル", "シンキ", "タンナマ",
-      "オシンコ", "ダイコン", "ニコミ", "ホネ", "ツインズ"
-    ];
+    <div id="stage"></div>
 
-    let kanaList = [];
-    function buildKanaListFromWords() {
-      const freq = {};
-      for (const word of words) {
-        for (const ch of word) {
-          freq[ch] = (freq[ch] || 0) + 1;
+    <div id="word-guide">
+        【得点単語】<br>
+        シロ, レバ, ガツ, ハツ, ツル, ホネ, アブラ, ニコミ, シンキ, カシラ, ビール, サイダー, タンナマ, オシンコ, ダイコン, ツインズ(虹), 各種シオ/タレ/ミソ/スヤキ等
+    </div>
+
+    <div class="controls">
+        <button id="btn-pause">一時停止</button>
+        <button id="btn-exit-play">終了する</button>
+    </div>
+
+    <div id="screen-title" class="overlay">
+        <div class="logo">モツオ２４</div>
+        <button class="menu-btn" onclick="game.start('3min')">3分モード</button>
+        <button class="menu-btn" onclick="game.start('5min')">5分モード</button>
+        <div class="rank-box">
+            <div style="text-align:center; border-bottom:1px solid #444; margin-bottom:5px">🏆 HIGH SCORES</div>
+            <div id="rank-list"></div>
+        </div>
+    </div>
+
+    <div id="screen-result" class="overlay hidden">
+        <h2 style="color:var(--accent)">RESULT</h2>
+        <div id="result-score" style="font-size: 3.5rem; font-weight: bold;">0</div>
+        <button class="menu-btn" onclick="location.reload()">タイトルへ</button>
+    </div>
+
+<script>
+const LETTERS = "アイウオカガキコサシロスソタダツナニネハホマミメヤラリルレワンバボブビドーズ".split("");
+const WORDS = [
+    "シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ",
+    "レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ",
+    "ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ",
+    "アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ",
+    "ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ",
+    "カシラシオ","カシラタレ","カシラミソ","カシラ",
+    "ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル",
+    "ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー",
+    "シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"
+].sort((a,b) => b.length - a.length);
+
+const game = {
+    board: [], score: 0, timeLeft: 0, timer: null, isPaused: false,
+
+    init() {
+        this.renderRanking();
+        document.getElementById('btn-pause').onclick = () => this.togglePause();
+        document.getElementById('btn-exit-play').onclick = () => this.end();
+        document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
+    },
+
+    start(mode) {
+        this.score = 0;
+        this.isPaused = false;
+        document.getElementById('screen-title').classList.add('hidden');
+        this.timeLeft = (mode === '3min') ? 180 : 300;
+        this.createBoard();
+        this.startTimer();
+    },
+
+    createBoard() {
+        let flat = [];
+        for(let i=0; i<24; i++) flat.push(LETTERS[Math.floor(Math.random()*LETTERS.length)]);
+        flat.push(""); flat.sort(() => Math.random() - 0.5);
+        this.board = [];
+        for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
+        this.draw();
+    },
+
+    draw() {
+        const stage = document.getElementById('stage');
+        stage.innerHTML = '';
+        this.board.forEach((row, y) => {
+            row.forEach((char, x) => {
+                const el = document.createElement('div');
+                el.className = 'tile' + (char === "" ? " empty" : "");
+                if (char === "ツインズ") el.classList.add('rainbow');
+                el.textContent = char;
+                el.onclick = () => this.move(x, y);
+                el.ontouchstart = (e) => { e.preventDefault(); this.move(x, y); };
+                stage.appendChild(el);
+            });
+        });
+        document.getElementById('score-box').textContent = `SCORE: ${this.score}`;
+    },
+
+    move(x, y) {
+        if (this.isPaused) return;
+        let ex, ey;
+        this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
+        if (x === ex || y === ey) {
+            if (x === ex) {
+                const dir = y < ey ? 1 : -1;
+                for (let i = ey; i !== y; i -= dir) this.board[i][x] = this.board[i-dir][x];
+            } else {
+                const dir = x < ex ? 1 : -1;
+                for (let i = ex; i !== x; i -= dir) this.board[y][i] = this.board[y][i-dir];
+            }
+            this.board[y][x] = "";
+            this.draw();
+            this.check();
         }
-      }
-      kanaList = Object.entries(freq).flatMap(([ch, count]) => Array(count).fill(ch));
-    }
-    buildKanaListFromWords();
+    },
 
-    function getRandomKana() {
-      return kanaList[Math.floor(Math.random() * kanaList.length)];
-    }
-
-    function createBlock() {
-      return { char: getRandomKana() };
-    }
-
-    function initBoard() {
-      board = [];
-      for (let y = 0; y < GRID_SIZE; y++) {
-        const row = [];
-        for (let x = 0; x < GRID_SIZE; x++) {
-          row.push({ char: getRandomKana() });
+    check() {
+        let found = false;
+        const pts = {2:10, 3:50, 4:150, 5:300, 6:300, 7:300, 8:300};
+        
+        let toClear = new Set();
+        // 横判定
+        for(let r=0; r<5; r++){
+            let s = this.board[r].map(c => c || " ").join("");
+            WORDS.forEach(w => {
+                let idx = s.indexOf(w);
+                if(idx !== -1) {
+                    this.score += pts[w.length] || 10;
+                    for(let i=0; i<w.length; i++) toClear.add(`${idx+i},${r}`);
+                    found = true;
+                }
+            });
         }
-        board.push(row);
-      }
-      emptyPos = { x: GRID_SIZE - 1, y: GRID_SIZE - 1 };
-      board[emptyPos.y][emptyPos.x] = EMPTY;
-    }
-
-    function drawBoard() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          const block = board[y][x];
-          ctx.fillStyle = block ? "#fff5cc" : "#111";
-          ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
-          if (block) {
-            ctx.fillStyle = "#000";
-            ctx.font = "20px Kosugi Maru";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(block.char, x * BLOCK_SIZE + BLOCK_SIZE / 2, y * BLOCK_SIZE + BLOCK_SIZE / 2);
-          }
+        // 縦判定
+        for(let c=0; c<5; c++){
+            let s = "";
+            for(let r=0; r<5; r++) s += (this.board[r][c] || " ");
+            WORDS.forEach(w => {
+                let idx = s.indexOf(w);
+                if(idx !== -1) {
+                    this.score += pts[w.length] || 10;
+                    for(let i=0; i<w.length; i++) toClear.add(`${c},${idx+i}`);
+                    found = true;
+                }
+            });
         }
-      }
-    }
 
-    function updateScore(points) {
-      score += points;
-      document.getElementById("scoreDisplay").textContent = `スコア: ${score}`;
-    }
-
-    function showWordEffect(words) {
-      const display = document.getElementById("wordDisplay");
-      display.innerHTML = words.map(w => `<div>${w}</div>`).join('');
-      setTimeout(() => { display.innerHTML = ''; }, 1000);
-    }
-
-    function checkWords() {
-      let foundWords = [];
-      let clearPos = [];
-
-      for (let y = 0; y < GRID_SIZE; y++) {
-        let line = board[y].map(b => b ? b.char : "").join("");
-        for (const word of words) {
-          const idx = line.indexOf(word);
-          if (idx !== -1) {
-            foundWords.push(word);
-            for (let i = 0; i < word.length; i++) clearPos.push({ x: idx + i, y });
-          }
+        if(found) {
+            toClear.forEach(pos => {
+                const [cx, cy] = pos.split(',').map(Number);
+                this.board[cy][cx] = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+            });
+            setTimeout(() => { this.draw(); this.check(); }, 300);
         }
-      }
+    },
 
-      for (let x = 0; x < GRID_SIZE; x++) {
-        let line = "";
-        for (let y = 0; y < GRID_SIZE; y++) line += board[y][x] ? board[y][x].char : "";
-        for (const word of words) {
-          const idx = line.indexOf(word);
-          if (idx !== -1) {
-            foundWords.push(word);
-            for (let i = 0; i < word.length; i++) clearPos.push({ x, y: idx + i });
-          }
-        }
-      }
+    startTimer() {
+        if(this.timer) clearInterval(this.timer);
+        this.timer = setInterval(() => {
+            if(this.isPaused) return;
+            this.timeLeft--;
+            let m = Math.floor(this.timeLeft/60), s = this.timeLeft%60;
+            document.getElementById('timer-box').textContent = `${m}:${s<10?'0':''}${s}`;
+            if(this.timeLeft <= 0) this.end();
+        }, 1000);
+    },
 
-      if (foundWords.length > 0) {
-        foundWords = [...new Set(foundWords)];
-        showWordEffect(foundWords);
-        for (const pos of clearPos) {
-          board[pos.y][pos.x] = createBlock();
-        }
-        updateScore(foundWords.reduce((sum, w) => sum + w.length * 10, 0));
-        board[emptyPos.y][emptyPos.x] = EMPTY;
-      }
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        document.getElementById('btn-pause').textContent = this.isPaused ? "再開" : "一時停止";
+    },
+
+    end() {
+        clearInterval(this.timer);
+        this.saveScore();
+        document.getElementById('screen-result').classList.remove('hidden');
+        document.getElementById('result-score').textContent = this.score;
+    },
+
+    saveScore() {
+        let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
+        list.push({s: this.score, d: new Date().toLocaleDateString()});
+        list.sort((a,b) => b.s - a.s);
+        localStorage.setItem('motsuo_rank', JSON.stringify(list.slice(0,5)));
+    },
+
+    renderRanking() {
+        let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
+        document.getElementById('rank-list').innerHTML = list.map((item, i) => 
+            `<div>${i+1}位: ${item.s}点</div>`
+        ).join('') || "記録なし";
     }
+};
 
-    canvas.addEventListener("pointerdown", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = Math.floor((e.clientX - rect.left) / BLOCK_SIZE);
-      const y = Math.floor((e.clientY - rect.top) / BLOCK_SIZE);
-      const dx = Math.abs(x - emptyPos.x);
-      const dy = Math.abs(y - emptyPos.y);
-      if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-        board[emptyPos.y][emptyPos.x] = board[y][x];
-        board[y][x] = EMPTY;
-        emptyPos = { x, y };
-        checkWords();
-        drawBoard();
-      }
-    });
-
-    function reloadBoard() {
-      initBoard();
-      score = 0;
-      updateScore(0);
-      drawBoard();
-    }
-
-    initBoard();
-    drawBoard();
-  </script>
+game.init();
+</script>
 </body>
 </html>
