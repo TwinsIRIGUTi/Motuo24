@@ -12,12 +12,10 @@
             margin: 0; overflow: hidden; touch-action: none; display: flex; flex-direction: column; align-items: center;
         }
         
-        /* ヘッダー・スコア */
         #ui-layer { width: 100%; max-width: 500px; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
         #score-box { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
         #timer-box { font-size: 1.2rem; font-family: monospace; }
 
-        /* メイン盤面 */
         #stage { 
             width: 92vw; height: 92vw; max-width: 400px; max-height: 400px;
             display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
@@ -25,32 +23,31 @@
         }
         .tile { 
             background: var(--tile); color: #222; display: flex; align-items: center; justify-content: center;
-            font-size: 1.5rem; font-weight: 900; border-radius: 6px; position: relative;
-            box-shadow: 0 3px 0 #d4ccb0; user-select: none;
+            font-size: 1.5rem; font-weight: 900; border-radius: 6px; box-shadow: 0 3px 0 #d4ccb0;
         }
         .tile.empty { opacity: 0; pointer-events: none; }
+        
+        /* ヒント点滅アニメーション */
+        .hint-flash { animation: hint-anim 0.5s infinite alternate; }
+        @keyframes hint-anim { from { background: var(--tile); } to { background: #ff9800; color: white; } }
+
         .rainbow { 
             background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff);
             background-size: 200%; animation: rb 1s linear infinite; color: white !important; 
         }
         @keyframes rb { 0%{background-position:0% 50%} 100%{background-position:100% 50%} }
+
+        /* 流れる単語ガイド */
+        #word-ticker-container {
+            width: 100%; overflow: hidden; background: rgba(255,255,255,0.1);
+            margin: 10px 0; white-space: nowrap; padding: 5px 0;
+        }
+        #word-ticker { display: inline-block; animation: ticker 25s linear infinite; font-size: 0.9rem; color: var(--accent); }
+        @keyframes ticker { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+
+        .controls { margin-top: 5px; display: flex; gap: 10px; }
+        button { padding: 8px 16px; border: none; border-radius: 20px; font-weight: bold; background: #444; color: white; }
         
-        /* 単語一覧ガイド */
-        #word-guide {
-            width: 92vw; max-width: 400px; margin-top: 10px; padding: 8px;
-            background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.75rem;
-            height: 60px; overflow-y: auto; line-height: 1.4; color: #ccc;
-        }
-
-        /* コントロール */
-        .controls { margin-top: 10px; display: flex; gap: 8px; }
-        button { 
-            padding: 8px 16px; border: none; border-radius: 20px; font-weight: bold;
-            background: #444; color: white; font-size: 0.85rem;
-        }
-        #btn-exit-play { background: #c62828; }
-
-        /* オーバーレイ */
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         .logo { font-size: 3rem; font-weight: 900; color: var(--accent); margin-bottom: 20px; }
         .menu-btn { width: 200px; padding: 12px; margin: 6px; border-radius: 25px; background: var(--accent); color: #000; font-weight: bold; border:none; }
@@ -67,14 +64,15 @@
 
     <div id="stage"></div>
 
-    <div id="word-guide">
-        【得点単語】<br>
-        シロ, レバ, ガツ, ハツ, ツル, ホネ, アブラ, ニコミ, シンキ, カシラ, ビール, サイダー, タンナマ, オシンコ, ダイコン, ツインズ(虹), 各種シオ/タレ/ミソ/スヤキ等
+    <div id="word-ticker-container">
+        <div id="word-ticker">
+            【得点単語】シロ ・ レバ ・ ガツ ・ ハツ ・ ツル ・ ホネ ・ アブラ ・ ニコミ ・ シンキ ・ カシラ ・ ビール ・ サイダー ・ タンナマ ・ オシンコ ・ ダイコン ・ ツインズ ・ 各種(シオ/タレ/ミソ/スヤキ) 
+        </div>
     </div>
 
     <div class="controls">
         <button id="btn-pause">一時停止</button>
-        <button id="btn-exit-play">終了する</button>
+        <button id="btn-exit-play" style="background:#c62828">終了</button>
     </div>
 
     <div id="screen-title" class="overlay">
@@ -109,6 +107,7 @@ const WORDS = [
 
 const game = {
     board: [], score: 0, timeLeft: 0, timer: null, isPaused: false,
+    lastActionTime: 0, hintInterval: null,
 
     init() {
         this.renderRanking();
@@ -124,6 +123,7 @@ const game = {
         this.timeLeft = (mode === '3min') ? 180 : 300;
         this.createBoard();
         this.startTimer();
+        this.resetHintTimer();
     },
 
     createBoard() {
@@ -141,22 +141,25 @@ const game = {
         this.board.forEach((row, y) => {
             row.forEach((char, x) => {
                 const el = document.createElement('div');
+                el.id = `tile-${x}-${y}`;
                 el.className = 'tile' + (char === "" ? " empty" : "");
                 if (char === "ツインズ") el.classList.add('rainbow');
                 el.textContent = char;
-                el.onclick = () => this.move(x, y);
-                el.ontouchstart = (e) => { e.preventDefault(); this.move(x, y); };
+                el.onclick = () => this.handleMove(x, y);
+                el.ontouchstart = (e) => { e.preventDefault(); this.handleMove(x, y); };
                 stage.appendChild(el);
             });
         });
         document.getElementById('score-box').textContent = `SCORE: ${this.score}`;
     },
 
-    move(x, y) {
+    handleMove(x, y) {
         if (this.isPaused) return;
         let ex, ey;
         this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
         if (x === ex || y === ey) {
+            this.clearHints();
+            this.resetHintTimer();
             if (x === ex) {
                 const dir = y < ey ? 1 : -1;
                 for (let i = ey; i !== y; i -= dir) this.board[i][x] = this.board[i-dir][x];
@@ -172,10 +175,9 @@ const game = {
 
     check() {
         let found = false;
-        const pts = {2:10, 3:50, 4:150, 5:300, 6:300, 7:300, 8:300};
-        
+        const pts = {2:10, 3:50, 4:150, 5:300, 6:300};
         let toClear = new Set();
-        // 横判定
+
         for(let r=0; r<5; r++){
             let s = this.board[r].map(c => c || " ").join("");
             WORDS.forEach(w => {
@@ -187,7 +189,6 @@ const game = {
                 }
             });
         }
-        // 縦判定
         for(let c=0; c<5; c++){
             let s = "";
             for(let r=0; r<5; r++) s += (this.board[r][c] || " ");
@@ -210,8 +211,35 @@ const game = {
         }
     },
 
+    resetHintTimer() {
+        this.lastActionTime = Date.now();
+        if(this.hintInterval) clearInterval(this.hintInterval);
+        this.hintInterval = setInterval(() => {
+            if(!this.isPaused && Date.now() - this.lastActionTime > 5000) this.showHint();
+        }, 1000);
+    },
+
+    showHint() {
+        this.clearHints();
+        // 盤面にある文字から単語のヒントを探す（簡易：最初の文字が一致する単語をハイライト）
+        for(let r=0; r<5; r++) {
+            for(let c=0; c<5; c++) {
+                let char = this.board[r][c];
+                if(!char) continue;
+                let match = WORDS.find(w => w.startsWith(char));
+                if(match) {
+                    document.getElementById(`tile-${c}-${r}`).classList.add('hint-flash');
+                    return; // 1つ見つけたら終了
+                }
+            }
+        }
+    },
+
+    clearHints() {
+        document.querySelectorAll('.tile').forEach(el => el.classList.remove('hint-flash'));
+    },
+
     startTimer() {
-        if(this.timer) clearInterval(this.timer);
         this.timer = setInterval(() => {
             if(this.isPaused) return;
             this.timeLeft--;
@@ -228,6 +256,7 @@ const game = {
 
     end() {
         clearInterval(this.timer);
+        clearInterval(this.hintInterval);
         this.saveScore();
         document.getElementById('screen-result').classList.remove('hidden');
         document.getElementById('result-score').textContent = this.score;
