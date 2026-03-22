@@ -34,6 +34,12 @@
             100% { background: var(--accent); transform: scale(0.8); opacity: 0; }
         }
 
+        .hint-active { animation: hint-glow 0.6s infinite alternate; z-index: 5 !important; }
+        @keyframes hint-glow {
+            from { background: var(--tile); box-shadow: 0 3px 0 #d4ccb0; }
+            to { background: #ff9800; color: white; box-shadow: 0 0 15px #ff9800; transform: scale(1.05); }
+        }
+
         .rainbow { 
             background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff);
             background-size: 200%; animation: rb 1s linear infinite; color: white !important; 
@@ -47,10 +53,11 @@
         #word-ticker { display: inline-block; animation: ticker 40s linear infinite; font-size: 0.9rem; color: var(--accent); }
         @keyframes ticker { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 
-        .controls { margin-top: 5px; display: flex; gap: 10px; }
-        button { padding: 12px 24px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; cursor: pointer; }
+        .controls { margin-top: 5px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 12px 20px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; cursor: pointer; }
+        #btn-hint { background: #4caf50; box-shadow: 0 4px 0 #2e7d32; }
         #btn-finish { background: #c62828; box-shadow: 0 4px 0 #8a1c1c; }
-        #btn-finish:active { transform: translateY(2px); box-shadow: none; }
+        button:active { transform: translateY(2px); box-shadow: none; }
         
         .overlay { position: fixed; inset: 0; background: rgba(0,8,20,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         .logo { font-size: 3.5rem; font-weight: 900; color: var(--accent); margin-bottom: 25px; }
@@ -76,6 +83,7 @@
 
     <div class="controls">
         <button id="btn-pause">一時停止</button>
+        <button id="btn-hint">ヒント！</button>
         <button id="btn-finish">終了</button>
     </div>
 
@@ -97,8 +105,6 @@
 
 <script>
 const WORDS = ["シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ","レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ","ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ","アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ","ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ","カシラシオ","カシラタレ","カシラミソ","カシラ","ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル","ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー","シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"].sort((a,b)=>b.length-a.length);
-
-// 有効な文字（単語リストに含まれる文字）のみを抽出してプールを作成
 const VALID_CHAR_POOL = WORDS.join("").split("");
 
 const game = {
@@ -108,21 +114,18 @@ const game = {
         this.renderRanking();
         document.getElementById('btn-pause').onclick = () => this.togglePause();
         document.getElementById('btn-finish').onclick = () => this.end();
+        document.getElementById('btn-hint').onclick = () => this.showHint();
         document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
     },
 
-    // 単語リストにある文字のみを返す
     getRandomLetter() { 
         return VALID_CHAR_POOL[Math.floor(Math.random() * VALID_CHAR_POOL.length)]; 
     },
 
     start(mode) {
-        this.score = 0;
-        this.isPaused = false;
-        document.getElementById('screen-title').classList.add('hidden');
+        this.score = 0; document.getElementById('screen-title').classList.add('hidden');
         this.timeLeft = (mode === '3min') ? 180 : 300;
-        this.createBoard();
-        this.startTimer();
+        this.createBoard(); this.startTimer();
     },
 
     createBoard() {
@@ -131,8 +134,7 @@ const game = {
         flat.push(""); flat.sort(() => Math.random() - 0.5);
         this.board = [];
         for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
-        this.draw();
-        this.check(true);
+        this.draw(); this.check(true);
     },
 
     draw() {
@@ -155,6 +157,7 @@ const game = {
 
     handleMove(x, y) {
         if (this.isPaused) return;
+        this.clearHints();
         let ex, ey;
         this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
         if (x === ex || y === ey) {
@@ -166,8 +169,7 @@ const game = {
                 for (let i = ex; i !== x; i -= dir) this.board[y][i] = this.board[y][i-dir];
             }
             this.board[y][x] = "";
-            this.draw();
-            this.check();
+            this.draw(); this.check();
         }
     },
 
@@ -175,7 +177,6 @@ const game = {
         let found = false;
         const pts = {2:10, 3:50, 4:150, 5:300};
         let clearSet = new Set(), used = new Set();
-
         const scan = (str, coords) => {
             WORDS.forEach(w => {
                 let idx = str.indexOf(w);
@@ -190,14 +191,12 @@ const game = {
                 }
             });
         };
-
         for(let r=0; r<5; r++) scan(this.board[r].map(c=>c||" ").join(""), [0,1,2,3,4].map(c=>`${c},${r}`));
         for(let c=0; c<5; c++) {
             let colStr = "", colCoords = [];
             for(let r=0; r<5; r++) { colStr += (this.board[r][c] || " "); colCoords.push(`${c},${r}`); }
             scan(colStr, colCoords);
         }
-
         if(found) {
             clearSet.forEach(pos => {
                 const [cx, cy] = pos.split(',').map(Number);
@@ -209,11 +208,75 @@ const game = {
                 const [cx, cy] = pos.split(',').map(Number);
                 this.board[cy][cx] = this.getRandomLetter();
             });
-            this.draw();
-            await this.check(isInitial);
+            this.draw(); await this.check(isInitial);
         }
     },
 
+    showHint() {
+        if(this.isPaused) return;
+        this.clearHints();
+        let ex, ey;
+        this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
+        const candidates = [];
+        for(let x=0; x<5; x++) if(x !== ex) candidates.push({x, y:ey});
+        for(let y=0; y<5; y++) if(y !== ey) candidates.push({x:ex, y});
+
+        for(let move of candidates) {
+            let tempBoard = JSON.parse(JSON.stringify(this.board));
+            let {x, y} = move;
+            if (x === ex) {
+                const dir = y < ey ? 1 : -1;
+                for (let i = ey; i !== y; i -= dir) tempBoard[i][x] = tempBoard[i-dir][x];
+            } else {
+                const dir = x < ex ? 1 : -1;
+                for (let i = ex; i !== x; i -= dir) tempBoard[y][i] = tempBoard[y][i-dir];
+            }
+            tempBoard[y][x] = "";
+
+            // シミュレーション後の盤面で単語を探す
+            for(let r=0; r<5; r++) {
+                let s = tempBoard[r].map(c=>c||" ").join("");
+                for(let w of WORDS) {
+                    let idx = s.indexOf(w);
+                    if(idx !== -1) { this.applyHintHighlight(tempBoard, r, idx, w, 'h'); return; }
+                }
+            }
+            for(let c=0; c<5; c++) {
+                let s = "";
+                for(let r=0; r<5; r++) s += (tempBoard[r][c] || " ");
+                for(let w of WORDS) {
+                    let idx = s.indexOf(w);
+                    if(idx !== -1) { this.applyHintHighlight(tempBoard, c, idx, w, 'v'); return; }
+                }
+            }
+        }
+    },
+
+    // ヒントの単語に含まれる文字数だけを光らせる
+    applyHintHighlight(tempBoard, lineIdx, startIdx, word, dir) {
+        // 単語内の文字ごとの必要数をカウント
+        const needed = {};
+        word.split("").forEach(c => needed[c] = (needed[c] || 0) + 1);
+
+        // 盤面上の対応箇所を光らせる
+        for(let i=0; i<word.length; i++) {
+            let tx, ty;
+            if(dir === 'h') { tx = startIdx + i; ty = lineIdx; }
+            else { tx = lineIdx; ty = startIdx + i; }
+            
+            const char = tempBoard[ty][tx];
+            if(char && needed[char] > 0) {
+                // 移動前の盤面で該当する文字を探して光らせる（簡易化のため現在の盤面の該当座標を光らせる）
+                const el = document.getElementById(`tile-${tx}-${ty}`);
+                if(el) {
+                    el.classList.add('hint-active');
+                    needed[char]--;
+                }
+            }
+        }
+    },
+
+    clearHints() { document.querySelectorAll('.tile').forEach(el => el.classList.remove('hint-active')); },
     startTimer() {
         if(this.timer) clearInterval(this.timer);
         this.timer = setInterval(() => {
@@ -224,26 +287,21 @@ const game = {
             if(this.timeLeft <= 0) this.end();
         }, 1000);
     },
-
     togglePause() {
         this.isPaused = !this.isPaused;
         document.getElementById('btn-pause').textContent = this.isPaused ? "再開" : "一時停止";
     },
-
     end() {
-        clearInterval(this.timer);
-        this.saveScore();
+        clearInterval(this.timer); this.saveScore();
         document.getElementById('screen-result').classList.remove('hidden');
         document.getElementById('result-score').textContent = this.score;
     },
-
     saveScore() {
         let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
         list.push({s: this.score, d: new Date().toLocaleDateString()});
         list.sort((a,b) => b.s - a.s);
         localStorage.setItem('motsuo_rank', JSON.stringify(list.slice(0,5)));
     },
-
     renderRanking() {
         let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
         document.getElementById('rank-list').innerHTML = list.map((item, i) => 
@@ -251,7 +309,6 @@ const game = {
         ).join('') || "記録なし";
     }
 };
-
 game.init();
 </script>
 </body>
