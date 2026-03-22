@@ -19,7 +19,7 @@
         #stage { 
             width: 92vw; height: 92vw; max-width: 400px; max-height: 400px;
             display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
-            background: rgba(255,255,255,0.05); padding: 5px; border-radius: 10px;
+            background: rgba(255,255,255,0.1); padding: 5px; border-radius: 10px;
         }
         .tile { 
             background: var(--tile); color: #222; display: flex; align-items: center; justify-content: center;
@@ -34,22 +34,23 @@
             100% { background: var(--accent); transform: scale(0.8); opacity: 0; }
         }
 
-        .rainbow { 
+        .special-tile { 
             background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #8b00ff);
-            background-size: 200%; animation: rb 1s linear infinite; color: white !important; 
+            background-size: 300% 300%; animation: rainbow-move 2s linear infinite;
+            color: white !important; text-shadow: 0 0 5px rgba(0,0,0,0.5);
         }
-        @keyframes rb { 0%{background-position:0% 50%} 100%{background-position:100% 50%} }
+        @keyframes rainbow-move { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
         #word-ticker-container {
-            width: 100%; overflow: hidden; background: rgba(255,255,255,0.1);
-            margin: 10px 0; white-space: nowrap; padding: 6px 0;
+            width: 100%; overflow: hidden; background: rgba(255,255,255,0.05);
+            margin: 10px 0; white-space: nowrap; padding: 6px 0; border-top: 1px solid #333; border-bottom: 1px solid #333;
         }
-        #word-ticker { display: inline-block; animation: ticker 40s linear infinite; font-size: 0.9rem; color: var(--accent); }
+        #word-ticker { display: inline-block; animation: ticker 30s linear infinite; font-size: 0.85rem; color: var(--accent); }
         @keyframes ticker { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 
         .controls { margin-top: 5px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
         button { padding: 12px 20px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; cursor: pointer; }
-        #btn-reload { background: #0277bd; box-shadow: 0 4px 0 #01579b; } /* リロードボタンを青に */
+        #btn-reload { background: #0277bd; box-shadow: 0 4px 0 #01579b; }
         #btn-finish { background: #c62828; box-shadow: 0 4px 0 #8a1c1c; }
         button:active { transform: translateY(2px); box-shadow: none; }
         
@@ -71,7 +72,7 @@
 
     <div id="word-ticker-container">
         <div id="word-ticker">
-            【得点単語】 シロ ・ レバ ・ ガツ ・ ハツ ・ ツル ・ ホネ ・ アブラ ・ ニコミ ・ シンキ ・ カシラ ・ ビール ・ サイダー ・ タンナマ ・ オシンコ ・ ダイコン ・ ツインズ(虹) ・ 各種(シオ/タレ/ミソ/スヤキ) 
+            【お品書き】 シロ ・ レバ ・ ガツ ・ ツル ・ ホネ ・ ハツ ・ アブラ ・ カシラ ・ ビール ・ ニコミ ・ シンキ ・ ウメワリ ・ タンナマ ・ オシンコ ・ ダイコン ・ ナンコツ ・ コブクロ ・ ✨ツインズ(SPECIAL)✨
         </div>
     </div>
 
@@ -98,7 +99,8 @@
     </div>
 
 <script>
-const WORDS = ["シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ","レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ","ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ","アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ","ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ","カシラシオ","カシラタレ","カシラミソ","カシラ","ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル","ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー","シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"].sort((a,b)=>b.length-a.length);
+const WORDS = ["ツインズ", "ウメワリ", "タンナマ", "オシンコ", "ダイコン", "ナンコツ", "コブクロ", "アブラ", "カシラ", "ビール", "ニコミ", "シンキ", "シロ", "レバ", "ガツ", "ツル", "ホネ", "ハツ"].sort((a,b)=>b.length-a.length);
+const SPECIAL_WORD = "ツインズ";
 const VALID_CHAR_POOL = WORDS.join("").split("");
 
 const game = {
@@ -132,10 +134,9 @@ const game = {
         this.board = [];
         for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
         this.draw();
-        this.check(true);
+        // check(true)を削除。初期配置で揃っていても、動かすまでそのまま保持されます。
     },
 
-    // 盤面をリフレッシュする新機能
     reloadBoard() {
         if (this.isPaused) return;
         this.createBoard();
@@ -149,7 +150,6 @@ const game = {
                 const el = document.createElement('div');
                 el.id = `tile-${x}-${y}`;
                 el.className = 'tile' + (char === "" ? " empty" : "");
-                if (char === "ツインズ") el.classList.add('rainbow');
                 el.textContent = char;
                 el.onclick = () => this.handleMove(x, y);
                 el.ontouchstart = (e) => { e.preventDefault(); this.handleMove(x, y); };
@@ -177,10 +177,12 @@ const game = {
         }
     },
 
-    async check(isInitial = false) {
+    async check() {
         let found = false;
-        const pts = {2:10, 3:50, 4:150, 5:300};
+        const pts = {2:20, 3:60, 4:200, 5:500};
         let clearSet = new Set(), used = new Set();
+        let foundSpecial = false;
+
         const scan = (str, coords) => {
             WORDS.forEach(w => {
                 let idx = str.indexOf(w);
@@ -189,31 +191,38 @@ const game = {
                     for(let i=0; i<w.length; i++) if(used.has(coords[idx+i])) overlap = true;
                     if(!overlap) {
                         for(let i=0; i<w.length; i++) { clearSet.add(coords[idx+i]); used.add(coords[idx+i]); }
-                        if(!isInitial) this.score += pts[w.length] || 300;
+                        let base = pts[w.length] || 500;
+                        if(w === SPECIAL_WORD) { base *= 3; foundSpecial = true; }
+                        this.score += base;
                         found = true;
                     }
                 }
             });
         };
+
         for(let r=0; r<5; r++) scan(this.board[r].map(c=>c||" ").join(""), [0,1,2,3,4].map(c=>`${c},${r}`));
         for(let c=0; c<5; c++) {
             let colStr = "", colCoords = [];
             for(let r=0; r<5; r++) { colStr += (this.board[r][c] || " "); colCoords.push(`${c},${r}`); }
             scan(colStr, colCoords);
         }
+
         if(found) {
             clearSet.forEach(pos => {
                 const [cx, cy] = pos.split(',').map(Number);
                 const el = document.getElementById(`tile-${cx}-${cy}`);
-                if(el) el.classList.add('clear-flash');
+                if(el) {
+                    if(foundSpecial) el.classList.add('special-tile');
+                    el.classList.add('clear-flash');
+                }
             });
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 400));
             clearSet.forEach(pos => {
                 const [cx, cy] = pos.split(',').map(Number);
                 this.board[cy][cx] = this.getRandomLetter();
             });
             this.draw();
-            await this.check(isInitial);
+            await this.check();
         }
     },
 
@@ -237,13 +246,13 @@ const game = {
         document.getElementById('result-score').textContent = this.score;
     },
     saveScore() {
-        let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
+        let list = JSON.parse(localStorage.getItem('motsuo_rank_new') || "[]");
         list.push({s: this.score, d: new Date().toLocaleDateString()});
         list.sort((a,b) => b.s - a.s);
-        localStorage.setItem('motsuo_rank', JSON.stringify(list.slice(0,5)));
+        localStorage.setItem('motsuo_rank_new', JSON.stringify(list.slice(0,5)));
     },
     renderRanking() {
-        let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
+        let list = JSON.parse(localStorage.getItem('motsuo_rank_new') || "[]");
         document.getElementById('rank-list').innerHTML = list.map((item, i) => 
             `<div style="display:flex; justify-content:space-between"><span>${i+1}位: ${item.s}点</span><small>${item.d}</small></div>`
         ).join('') || "記録なし";
