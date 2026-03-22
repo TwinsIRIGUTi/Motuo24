@@ -48,11 +48,13 @@
         @keyframes ticker { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 
         .controls { margin-top: 5px; display: flex; gap: 10px; }
-        button { padding: 10px 20px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; }
+        button { padding: 12px 24px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; cursor: pointer; }
+        #btn-finish { background: #c62828; box-shadow: 0 4px 0 #8a1c1c; }
+        #btn-finish:active { transform: translateY(2px); box-shadow: none; }
         
         .overlay { position: fixed; inset: 0; background: rgba(0,8,20,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
         .logo { font-size: 3.5rem; font-weight: 900; color: var(--accent); margin-bottom: 25px; }
-        .menu-btn { width: 220px; padding: 15px; margin: 8px; border-radius: 30px; background: var(--accent); color: #000; font-weight: bold; border:none; font-size: 1.1rem; }
+        .menu-btn { width: 220px; padding: 15px; margin: 8px; border-radius: 30px; background: var(--accent); color: #000; font-weight: bold; border:none; font-size: 1.1rem; cursor: pointer; }
         .rank-box { margin-top: 20px; width: 260px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; font-size: 0.9rem; }
         .hidden { display: none !important; }
     </style>
@@ -74,7 +76,7 @@
 
     <div class="controls">
         <button id="btn-pause">一時停止</button>
-        <button id="btn-exit-play" style="background:#8b0000">終了</button>
+        <button id="btn-finish">ゲーム終了</button>
     </div>
 
     <div id="screen-title" class="overlay">
@@ -88,14 +90,14 @@
     </div>
 
     <div id="screen-result" class="overlay hidden">
-        <h2 id="result-title" style="color:var(--accent)">RESULT</h2>
+        <h2 style="color:var(--accent); letter-spacing: 2px;">お疲れ様でした！</h2>
         <div id="result-score" style="font-size: 4rem; font-weight: bold; margin: 10px 0;">0</div>
-        <p id="deadlock-msg" class="hidden" style="color:#ff5252; font-weight:bold;">手詰まりです！</p>
         <button class="menu-btn" onclick="location.reload()">タイトルへ</button>
     </div>
 
 <script>
-const WEIGHTED_LETTERS = ("シレハガツバラ".repeat(5) + "アイオカキサシスソタナニノホマミヤリルレワン".repeat(2) + "ウドゲゴザジズゼゾダデドバビブベボパピプペポ").split("");
+// 出現率の調整：シ、ロ、レ、バ、ハ、ツを多めに配置
+const WEIGHTED_LETTERS = ("シロレバハツ".repeat(6) + "アイオカキサシスソタナニノホマミヤリルレワン".repeat(2) + "ガギグゲゴザジズゼゾダデドバビブベボ").split("");
 const WORDS = ["シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ","レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ","ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ","アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ","ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ","カシラシオ","カシラタレ","カシラミソ","カシラ","ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル","ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー","シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"].sort((a,b)=>b.length-a.length);
 
 const game = {
@@ -104,7 +106,7 @@ const game = {
     init() {
         this.renderRanking();
         document.getElementById('btn-pause').onclick = () => this.togglePause();
-        document.getElementById('btn-exit-play').onclick = () => this.end();
+        document.getElementById('btn-finish').onclick = () => this.end();
         document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
     },
 
@@ -120,16 +122,13 @@ const game = {
     },
 
     createBoard() {
-        let attempt = 0;
-        do {
-            let flat = [];
-            for(let i=0; i<24; i++) flat.push(this.getRandomLetter());
-            flat.push(""); flat.sort(() => Math.random() - 0.5);
-            this.board = [];
-            for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
-            attempt++;
-        } while (!this.canMakeAnyWord() && attempt < 100); // 詰んでいない配置になるまで生成
+        let flat = [];
+        for(let i=0; i<24; i++) flat.push(this.getRandomLetter());
+        flat.push(""); flat.sort(() => Math.random() - 0.5);
+        this.board = [];
+        for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
         this.draw();
+        this.check(true);
     },
 
     draw() {
@@ -164,9 +163,7 @@ const game = {
             }
             this.board[y][x] = "";
             this.draw();
-            this.check().then(() => {
-                if (!this.canMakeAnyWord()) this.end(true); // 動かした後に手詰まり判定
-            });
+            this.check();
         }
     },
 
@@ -213,43 +210,6 @@ const game = {
         }
     },
 
-    // 手詰まり判定ロジック
-    canMakeAnyWord() {
-        let ex, ey;
-        this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
-        
-        // 空きマスの縦横に移動可能なタイルをすべてシミュレート
-        const moves = [];
-        for(let x=0; x<5; x++) if(x !== ex) moves.push({x, y:ey});
-        for(let y=0; y<5; y++) if(y !== ey) moves.push({x:ex, y});
-
-        for(let move of moves) {
-            let tempBoard = JSON.parse(JSON.stringify(this.board));
-            let {x, y} = move;
-            // シミュレーション移動
-            if (x === ex) {
-                const dir = y < ey ? 1 : -1;
-                for (let i = ey; i !== y; i -= dir) tempBoard[i][x] = tempBoard[i-dir][x];
-            } else {
-                const dir = x < ex ? 1 : -1;
-                for (let i = ex; i !== x; i -= dir) tempBoard[y][i] = tempBoard[y][i-dir];
-            }
-            tempBoard[y][x] = "";
-
-            // その状態で単語があるか
-            for(let r=0; r<5; r++) {
-                let s = tempBoard[r].map(c=>c||" ").join("");
-                if(WORDS.some(w => s.includes(w))) return true;
-            }
-            for(let c=0; c<5; c++) {
-                let s = "";
-                for(let r=0; r<5; r++) s += (tempBoard[r][c] || " ");
-                if(WORDS.some(w => s.includes(w))) return true;
-            }
-        }
-        return false;
-    },
-
     startTimer() {
         if(this.timer) clearInterval(this.timer);
         this.timer = setInterval(() => {
@@ -266,10 +226,9 @@ const game = {
         document.getElementById('btn-pause').textContent = this.isPaused ? "再開" : "一時停止";
     },
 
-    end(isDeadlock = false) {
+    end() {
         clearInterval(this.timer);
         this.saveScore();
-        if(isDeadlock) document.getElementById('deadlock-msg').classList.remove('hidden');
         document.getElementById('screen-result').classList.remove('hidden');
         document.getElementById('result-score').textContent = this.score;
     },
