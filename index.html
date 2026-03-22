@@ -20,20 +20,18 @@
             width: 92vw; height: 92vw; max-width: 400px; max-height: 400px;
             display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
             background: rgba(255,255,255,0.05); padding: 5px; border-radius: 10px;
-            position: relative;
         }
         .tile { 
             background: var(--tile); color: #222; display: flex; align-items: center; justify-content: center;
             font-size: 1.5rem; font-weight: 900; border-radius: 6px; box-shadow: 0 3px 0 #d4ccb0;
-            transition: background 0.2s, transform 0.1s; z-index: 1;
+            transition: transform 0.1s, opacity 0.2s;
         }
         .tile.empty { opacity: 0; pointer-events: none; }
         
-        /* ヒント点滅 */
-        .hint-flash { animation: hint-anim 0.4s infinite alternate; z-index: 5 !important; }
-        @keyframes hint-anim { 
-            from { background: var(--tile); transform: scale(1); } 
-            to { background: #ff9800; color: white; transform: scale(1.08); box-shadow: 0 0 15px #ff9800; } 
+        .clear-flash { animation: flash-white 0.3s ease-out forwards; z-index: 10; }
+        @keyframes flash-white {
+            0% { background: #fff; transform: scale(1); box-shadow: 0 0 20px #fff; }
+            100% { background: var(--accent); transform: scale(0.8); opacity: 0; }
         }
 
         .rainbow { 
@@ -44,19 +42,18 @@
 
         #word-ticker-container {
             width: 100%; overflow: hidden; background: rgba(255,255,255,0.1);
-            margin: 10px 0; white-space: nowrap; padding: 6px 0; border-y: 1px solid rgba(255,255,255,0.2);
+            margin: 10px 0; white-space: nowrap; padding: 6px 0;
         }
-        #word-ticker { display: inline-block; animation: ticker 40s linear infinite; font-size: 0.9rem; color: var(--accent); font-weight: bold; }
+        #word-ticker { display: inline-block; animation: ticker 40s linear infinite; font-size: 0.9rem; color: var(--accent); }
         @keyframes ticker { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
 
         .controls { margin-top: 5px; display: flex; gap: 10px; }
-        button { padding: 10px 20px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; border: 1px solid #555; }
+        button { padding: 10px 20px; border: none; border-radius: 25px; font-weight: bold; background: #333; color: white; }
         
         .overlay { position: fixed; inset: 0; background: rgba(0,8,20,0.98); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
-        .logo { font-size: 3.5rem; font-weight: 900; color: var(--accent); margin-bottom: 25px; text-shadow: 0 0 20px rgba(255,235,59,0.4); }
-        .menu-btn { width: 220px; padding: 15px; margin: 8px; border-radius: 30px; background: var(--accent); color: #000; font-weight: bold; border:none; font-size: 1.1rem; box-shadow: 0 4px 0 #b7a500; }
-        .menu-btn:active { transform: translateY(2px); box-shadow: none; }
-        .rank-box { margin-top: 20px; width: 260px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.1); }
+        .logo { font-size: 3.5rem; font-weight: 900; color: var(--accent); margin-bottom: 25px; }
+        .menu-btn { width: 220px; padding: 15px; margin: 8px; border-radius: 30px; background: var(--accent); color: #000; font-weight: bold; border:none; font-size: 1.1rem; }
+        .rank-box { margin-top: 20px; width: 260px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; font-size: 0.9rem; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -71,7 +68,7 @@
 
     <div id="word-ticker-container">
         <div id="word-ticker">
-            【得点単語】 シロ ・ レバ ・ ガツ ・ ハツ ・ ツル ・ ホネ ・ アブラ ・ ニコミ ・ シンキ ・ カシラ ・ ビール ・ サイダー ・ タンナマ ・ オシンコ ・ ダイコン ・ ツインズ(虹) ・ シオ/タレ/ミソ/スヤキ 各種 
+            【得点単語】 シロ ・ レバ ・ ガツ ・ ハツ ・ ツル ・ ホネ ・ アブラ ・ ニコミ ・ シンキ ・ カシラ ・ ビール ・ サイダー ・ タンナマ ・ オシンコ ・ ダイコン ・ ツインズ(虹) ・ 各種(シオ/タレ/ミソ/スヤキ) 
         </div>
     </div>
 
@@ -85,34 +82,24 @@
         <button class="menu-btn" onclick="game.start('3min')">3分モード開始</button>
         <button class="menu-btn" onclick="game.start('5min')">5分モード開始</button>
         <div class="rank-box">
-            <div style="text-align:center; border-bottom:1px solid #444; margin-bottom:8px; padding-bottom:4px">🏆 TOP 5 HIGH SCORES</div>
-            <div id="rank-list" style="line-height:1.6"></div>
+            <div style="text-align:center; border-bottom:1px solid #444; margin-bottom:8px">🏆 HIGH SCORES</div>
+            <div id="rank-list"></div>
         </div>
     </div>
 
     <div id="screen-result" class="overlay hidden">
-        <h2 style="color:var(--accent); letter-spacing: 4px;">終了</h2>
+        <h2 id="result-title" style="color:var(--accent)">RESULT</h2>
         <div id="result-score" style="font-size: 4rem; font-weight: bold; margin: 10px 0;">0</div>
-        <button class="menu-btn" onclick="location.reload()">タイトルへ戻る</button>
+        <p id="deadlock-msg" class="hidden" style="color:#ff5252; font-weight:bold;">手詰まりです！</p>
+        <button class="menu-btn" onclick="location.reload()">タイトルへ</button>
     </div>
 
 <script>
-const LETTERS = "アイウオカガキコサシロスソタダツナニネハホマミメヤラリルレワンバボブビドーズ".split("");
-const WORDS = [
-    "シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ",
-    "レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ",
-    "ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ",
-    "アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ",
-    "ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ",
-    "カシラシオ","カシラタレ","カシラミソ","カシラ",
-    "ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル",
-    "ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー",
-    "シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"
-].sort((a,b) => b.length - a.length);
+const WEIGHTED_LETTERS = ("シレハガツバラ".repeat(5) + "アイオカキサシスソタナニノホマミヤリルレワン".repeat(2) + "ウドゲゴザジズゼゾダデドバビブベボパピプペポ").split("");
+const WORDS = ["シロシオ","シロタレ","シロミソ","シロスヤキ","シロナマ","シロ","レバシオ","レバタレ","レバミソ","レバスヤキ","レバボイル","レバ","ガツシオ","ガツタレ","ガツミソ","ガツスヤキ","ガツナマ","ガツ","アブラシオ","アブラタレ","アブラミソ","アブラナマ","アブラ","ハツシオ","ハツタレ","ハツミソ","ハツスヤキ","ハツナマ","ハツ","カシラシオ","カシラタレ","カシラミソ","カシラ","ツルシオ","ツルスヤキ","ツルミソ","ツルタレ","ツル","ビール","ウメワリ","ブドウワリ","ウイスキー","サイダー","シンキ","タンナマ","オシンコ","ダイコン","ニコミ","ホネ","ツインズ"].sort((a,b)=>b.length-a.length);
 
 const game = {
     board: [], score: 0, timeLeft: 0, timer: null, isPaused: false,
-    lastActionTime: 0, hintTimer: null,
 
     init() {
         this.renderRanking();
@@ -121,6 +108,8 @@ const game = {
         document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
     },
 
+    getRandomLetter() { return WEIGHTED_LETTERS[Math.floor(Math.random() * WEIGHTED_LETTERS.length)]; },
+
     start(mode) {
         this.score = 0;
         this.isPaused = false;
@@ -128,18 +117,19 @@ const game = {
         this.timeLeft = (mode === '3min') ? 180 : 300;
         this.createBoard();
         this.startTimer();
-        this.resetHintTimer();
     },
 
     createBoard() {
-        let flat = [];
-        for(let i=0; i<24; i++) flat.push(LETTERS[Math.floor(Math.random()*LETTERS.length)]);
-        flat.push(""); 
-        flat.sort(() => Math.random() - 0.5);
-        this.board = [];
-        for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
+        let attempt = 0;
+        do {
+            let flat = [];
+            for(let i=0; i<24; i++) flat.push(this.getRandomLetter());
+            flat.push(""); flat.sort(() => Math.random() - 0.5);
+            this.board = [];
+            for(let i=0; i<5; i++) this.board.push(flat.slice(i*5, i*5+5));
+            attempt++;
+        } while (!this.canMakeAnyWord() && attempt < 100); // 詰んでいない配置になるまで生成
         this.draw();
-        this.check(true); // スコア無しの初期チェック
     },
 
     draw() {
@@ -165,8 +155,6 @@ const game = {
         let ex, ey;
         this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
         if (x === ex || y === ey) {
-            this.clearHints();
-            this.resetHintTimer();
             if (x === ex) {
                 const dir = y < ey ? 1 : -1;
                 for (let i = ey; i !== y; i -= dir) this.board[i][x] = this.board[i-dir][x];
@@ -176,110 +164,90 @@ const game = {
             }
             this.board[y][x] = "";
             this.draw();
-            this.check();
+            this.check().then(() => {
+                if (!this.canMakeAnyWord()) this.end(true); // 動かした後に手詰まり判定
+            });
         }
     },
 
-    check(isInitial = false) {
+    async check(isInitial = false) {
         let found = false;
         const pts = {2:10, 3:50, 4:150, 5:300};
-        let toClear = new Set();
-        let usedCoords = new Set(); // 重複防止用
+        let clearSet = new Set(), used = new Set();
 
-        // 横スキャン
-        for(let r=0; r<5; r++){
-            let s = this.board[r].map(c => c || " ").join("");
+        const scan = (str, coords) => {
             WORDS.forEach(w => {
-                let idx = s.indexOf(w);
-                if(idx !== -1) {
-                    let isOverlap = false;
-                    for(let i=0; i<w.length; i++) if(usedCoords.has(`${idx+i},${r}`)) isOverlap = true;
-                    if(!isOverlap) {
+                let idx = str.indexOf(w);
+                if (idx !== -1) {
+                    let overlap = false;
+                    for(let i=0; i<w.length; i++) if(used.has(coords[idx+i])) overlap = true;
+                    if(!overlap) {
+                        for(let i=0; i<w.length; i++) { clearSet.add(coords[idx+i]); used.add(coords[idx+i]); }
                         if(!isInitial) this.score += pts[w.length] || 300;
-                        for(let i=0; i<w.length; i++) {
-                            toClear.add(`${idx+i},${r}`);
-                            usedCoords.add(`${idx+i},${r}`);
-                        }
                         found = true;
                     }
                 }
             });
-        }
-        // 縦スキャン
-        for(let c=0; c<5; c++){
-            let s = "";
-            for(let r=0; r<5; r++) s += (this.board[r][c] || " ");
-            WORDS.forEach(w => {
-                let idx = s.indexOf(w);
-                if(idx !== -1) {
-                    let isOverlap = false;
-                    for(let i=0; i<w.length; i++) if(usedCoords.has(`${c},${idx+i}`)) isOverlap = true;
-                    if(!isOverlap) {
-                        if(!isInitial) this.score += pts[w.length] || 300;
-                        for(let i=0; i<w.length; i++) {
-                            toClear.add(`${c},${idx+i}`);
-                            usedCoords.add(`${c},${idx+i}`);
-                        }
-                        found = true;
-                    }
-                }
-            });
+        };
+
+        for(let r=0; r<5; r++) scan(this.board[r].map(c=>c||" ").join(""), [0,1,2,3,4].map(c=>`${c},${r}`));
+        for(let c=0; c<5; c++) {
+            let colStr = "", colCoords = [];
+            for(let r=0; r<5; r++) { colStr += (this.board[r][c] || " "); colCoords.push(`${c},${r}`); }
+            scan(colStr, colCoords);
         }
 
         if(found) {
-            toClear.forEach(pos => {
+            clearSet.forEach(pos => {
                 const [cx, cy] = pos.split(',').map(Number);
-                this.board[cy][cx] = LETTERS[Math.floor(Math.random()*LETTERS.length)];
+                const el = document.getElementById(`tile-${cx}-${cy}`);
+                if(el) el.classList.add('clear-flash');
             });
-            setTimeout(() => { this.draw(); this.check(isInitial); }, 350);
+            await new Promise(r => setTimeout(r, 300));
+            clearSet.forEach(pos => {
+                const [cx, cy] = pos.split(',').map(Number);
+                this.board[cy][cx] = this.getRandomLetter();
+            });
+            this.draw();
+            await this.check(isInitial);
         }
     },
 
-    resetHintTimer() {
-        this.lastActionTime = Date.now();
-        if(this.hintTimer) clearTimeout(this.hintTimer);
-        this.hintTimer = setTimeout(() => this.showHint(), 5000);
-    },
-
-    showHint() {
-        if(this.isPaused) return;
-        this.clearHints();
+    // 手詰まり判定ロジック
+    canMakeAnyWord() {
+        let ex, ey;
+        this.board.forEach((row, r) => row.forEach((c, col) => { if(c === "") { ex=col; ey=r; } }));
         
-        let hintTiles = [];
-        // 横方向
-        for(let r=0; r<5; r++) {
-            let s = this.board[r].map(c => c || " ").join("");
-            for(const w of WORDS) {
-                let idx = s.indexOf(w);
-                if(idx !== -1) {
-                    for(let i=0; i<w.length; i++) hintTiles.push(`tile-${idx+i}-${r}`);
-                    this.applyHint(hintTiles); return;
-                }
+        // 空きマスの縦横に移動可能なタイルをすべてシミュレート
+        const moves = [];
+        for(let x=0; x<5; x++) if(x !== ex) moves.push({x, y:ey});
+        for(let y=0; y<5; y++) if(y !== ey) moves.push({x:ex, y});
+
+        for(let move of moves) {
+            let tempBoard = JSON.parse(JSON.stringify(this.board));
+            let {x, y} = move;
+            // シミュレーション移動
+            if (x === ex) {
+                const dir = y < ey ? 1 : -1;
+                for (let i = ey; i !== y; i -= dir) tempBoard[i][x] = tempBoard[i-dir][x];
+            } else {
+                const dir = x < ex ? 1 : -1;
+                for (let i = ex; i !== x; i -= dir) tempBoard[y][i] = tempBoard[y][i-dir];
+            }
+            tempBoard[y][x] = "";
+
+            // その状態で単語があるか
+            for(let r=0; r<5; r++) {
+                let s = tempBoard[r].map(c=>c||" ").join("");
+                if(WORDS.some(w => s.includes(w))) return true;
+            }
+            for(let c=0; c<5; c++) {
+                let s = "";
+                for(let r=0; r<5; r++) s += (tempBoard[r][c] || " ");
+                if(WORDS.some(w => s.includes(w))) return true;
             }
         }
-        // 縦方向
-        for(let c=0; c<5; c++) {
-            let s = "";
-            for(let r=0; r<5; r++) s += (this.board[r][c] || " ");
-            for(const w of WORDS) {
-                let idx = s.indexOf(w);
-                if(idx !== -1) {
-                    for(let i=0; i<w.length; i++) hintTiles.push(`tile-${c}-${idx+i}`);
-                    this.applyHint(hintTiles); return;
-                }
-            }
-        }
-    },
-
-    applyHint(ids) {
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.classList.add('hint-flash');
-        });
-    },
-
-    clearHints() {
-        document.querySelectorAll('.tile').forEach(el => el.classList.remove('hint-flash'));
+        return false;
     },
 
     startTimer() {
@@ -298,10 +266,10 @@ const game = {
         document.getElementById('btn-pause').textContent = this.isPaused ? "再開" : "一時停止";
     },
 
-    end() {
+    end(isDeadlock = false) {
         clearInterval(this.timer);
-        clearTimeout(this.hintTimer);
         this.saveScore();
+        if(isDeadlock) document.getElementById('deadlock-msg').classList.remove('hidden');
         document.getElementById('screen-result').classList.remove('hidden');
         document.getElementById('result-score').textContent = this.score;
     },
@@ -316,7 +284,7 @@ const game = {
     renderRanking() {
         let list = JSON.parse(localStorage.getItem('motsuo_rank') || "[]");
         document.getElementById('rank-list').innerHTML = list.map((item, i) => 
-            `<div style="display:flex; justify-content:space-between;"><span>${i+1}位: ${item.s}点</span><span style="font-size:0.7rem; opacity:0.6">${item.d}</span></div>`
+            `<div style="display:flex; justify-content:space-between"><span>${i+1}位: ${item.s}点</span><small>${item.d}</small></div>`
         ).join('') || "記録なし";
     }
 };
